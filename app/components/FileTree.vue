@@ -13,7 +13,7 @@
                     Open
                 </button>
             </div>
-            <FileTree v-if="node.type === 'dir' && node.open" class="ml-4" :nodes="node.children || []"
+            <FileTree v-if="node.type === 'dir' && node.open" class="ml-5" :nodes="node.children || []"
                 :file="file" :folder="folder" :onClick="onClick" :onSelect="onSelect" />
         </li>
     </ul>
@@ -31,7 +31,7 @@ const props = defineProps<{
 <style lang="css" scoped>
 .node {
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     transition: font-weight .1s ease;
     white-space: nowrap;
     overflow: hidden;
@@ -62,5 +62,12 @@ const props = defineProps<{
     transform: translateY(-2px);
     background: rgba(255, 255, 255, 0.25);
     border-color: rgba(255, 255, 255, 0.37);
+}
+
+@media (max-width: 767px) {
+    .node {
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
 }
 </style>

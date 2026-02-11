@@ -119,10 +119,19 @@
     .header-bar {
         padding-left: 48px;
     }
+
+    .file-label {
+        font-size: 0.75rem;
+    }
+
+    .btn {
+        font-size: 0.8rem;
+        padding: 5px 12px;
+    }
 }
 
 .file-label {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     opacity: 0.9;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -209,26 +218,33 @@ function startResize(e: MouseEvent) {
     const onMouseMove = (ev: MouseEvent) => {
         sidebarWidth.value = Math.max(150, Math.min(500, ev.clientX - 8));
     };
-    const onMouseUp = () => {
+    const cleanup = () => {
         isResizing.value = false;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
         localStorage.setItem("locode:sidebarWidth", String(sidebarWidth.value));
         document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener("mouseup", cleanup);
+        resizeCleanup = null;
     };
     document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("mouseup", cleanup);
+    resizeCleanup = cleanup;
+}
+
+let mq: MediaQueryList;
+let resizeCleanup: (() => void) | null = null;
+
+function onMediaChange(e: MediaQueryListEvent) {
+    isMobile.value = e.matches;
+    sidebarOpen.value = !e.matches;
 }
 
 onMounted(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
+    mq = window.matchMedia("(max-width: 767px)");
     isMobile.value = mq.matches;
     sidebarOpen.value = !mq.matches;
-    mq.addEventListener("change", (e) => {
-        isMobile.value = e.matches;
-        sidebarOpen.value = !e.matches;
-    });
+    mq.addEventListener("change", onMediaChange);
 
     const savedWidth = localStorage.getItem("locode:sidebarWidth");
     if (savedWidth) sidebarWidth.value = parseInt(savedWidth);
@@ -240,6 +256,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    mq?.removeEventListener("change", onMediaChange);
+    resizeCleanup?.();
     window.removeEventListener("keydown", onKeyDown);
 });
 
@@ -260,29 +278,44 @@ function onSelectRoot(path: string) {
 
 function onSelectFile(path: string) {
     if (isMobile.value) sidebarOpen.value = false;
-    if (path !== currentFile.value) loadFile(path);
+    loadFile(path);
 }
 
 async function loadFile(path: string) {
     currentFile.value = path;
     localStorage.setItem("locode:currentFile", path);
-    const res = await fetch("/api/read?path=" + path);
-    if (!res.ok) {
+    try {
+        const res = await fetch("/api/read?path=" + path);
+        if (!res.ok) {
+            code.value = await res.text();
+            language.value = "plaintext";
+            return;
+        }
+        language.value = detectLanguage(path);
         code.value = await res.text();
+    } catch {
+        code.value = "Network error: unable to load file";
         language.value = "plaintext";
-        return;
     }
-    language.value = detectLanguage(path);
-    code.value = await res.text();
 }
 
+let isSaving = false;
+
 async function saveFile() {
-    if (!currentFile.value) return;
-    await fetch("/api/write", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: currentFile.value, content: code.value }),
-    });
+    if (!currentFile.value || isSaving) return;
+    isSaving = true;
+    try {
+        const res = await fetch("/api/write", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: currentFile.value, content: code.value }),
+        });
+        if (!res.ok) console.error("Save failed:", await res.text());
+    } catch {
+        console.error("Network error: unable to save file");
+    } finally {
+        isSaving = false;
+    }
 }
 
 const langMap: Record<string, string> = {
