@@ -45,15 +45,6 @@ watch(
     }
 );
 
-// watch(
-//     () => props.language,
-//     (newLang) => {
-//         if (editor && editor.getModel() && newLang) {
-//             $monaco.editor.setModelLanguage(editor.getModel()!, newLang);
-//         }
-//     }
-// );
-
 onBeforeUnmount(() => {
     if (editor) {
         editor.dispose();

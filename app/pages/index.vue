@@ -9,17 +9,21 @@
         <div v-if="sidebarOpen" class="backdrop md:hidden" @click="sidebarOpen = false" />
 
         <!-- Sidebar -->
-        <div class="sidebar" :class="{ open: sidebarOpen }">
-            <FileExplorer @select-file="onSelectFile" :file="currentFile" rootPath="." />
+        <div class="sidebar" :class="{ open: sidebarOpen, 'no-transition': isResizing }" :style="sidebarStyle">
+            <FileExplorer @select-file="onSelectFile" @select-root="onSelectRoot" :file="currentFile" :rootPath="rootPath" />
+            <div v-if="!isMobile" class="resize-handle" @mousedown.prevent="startResize" />
         </div>
 
         <!-- Editor panel -->
-        <div class="flex-1 flex flex-col gap-2 min-w-0">
+        <div class="flex-1 flex flex-col gap-2 min-w-0" :class="{ 'pointer-events-none': isResizing }">
             <div class="header-bar flex items-center gap-2">
-                <span v-if="currentFile" class="file-label font-bold">{{ currentFile }}</span>
-                <button @click="saveFile" class="btn ml-auto" :disabled="!currentFile">Save</button>
+                <span v-if="currentFile" class="file-label font-bold" :title="displayPath"><bdo dir="ltr">{{ displayPath }}</bdo></span>
+                <button @click="saveFile" class="btn ml-auto" :class="{ 'btn-press': savePressing }" :disabled="!currentFile">Save</button>
+                <img src="/logo.svg" alt="LoCode" class="logo" />
             </div>
-            <MonacoEditor v-model="code" :language="language" />
+            <div class="flex-1 editor-area">
+                <MonacoEditor v-model="code" :language="language" />
+            </div>
         </div>
     </div>
 </template>
@@ -64,9 +68,30 @@
 }
 
 .sidebar {
-    width: 250px;
+    width: var(--sw, 250px);
     flex-shrink: 0;
     height: 100%;
+    position: relative;
+    transition: width .3s ease;
+}
+
+.sidebar.no-transition {
+    transition: none;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+.resize-handle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
 }
 
 /* Mobile: drawer slide-in */
@@ -102,6 +127,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
+    direction: rtl;
 }
 
 .btn {
@@ -128,15 +155,71 @@
     cursor: default;
     transform: none;
 }
+
+.btn-press {
+    transform: scale(0.92) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.logo {
+    height: 40px;
+    width: 40px;
+    flex-shrink: 0;
+    border-radius: 6px;
+}
+
+.editor-area {
+    background: #1e1e1e;
+    border-radius: 5px;
+    overflow: hidden;
+}
 </style>
 
 <script setup lang="ts">
+const rootPath = ref(
+    import.meta.client ? localStorage.getItem("locode:rootPath") || "" : ""
+);
 const code = ref("");
 const currentFile = ref("");
 const language = ref("");
 const sidebarOpen = ref(false);
+const sidebarWidth = ref(250);
+const isResizing = ref(false);
+const savePressing = ref(false);
 
 const isMobile = ref(false);
+
+const displayPath = computed(() => {
+    if (!currentFile.value) return "";
+    if (rootPath.value && currentFile.value.startsWith(rootPath.value)) {
+        return currentFile.value.slice(rootPath.value.length + 1);
+    }
+    return currentFile.value;
+});
+
+const sidebarStyle = computed(() => {
+    if (isMobile.value) return {};
+    return { "--sw": sidebarWidth.value + "px" };
+});
+
+function startResize(e: MouseEvent) {
+    isResizing.value = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMouseMove = (ev: MouseEvent) => {
+        sidebarWidth.value = Math.max(150, Math.min(500, ev.clientX - 8));
+    };
+    const onMouseUp = () => {
+        isResizing.value = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        localStorage.setItem("locode:sidebarWidth", String(sidebarWidth.value));
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+}
 
 onMounted(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -147,9 +230,33 @@ onMounted(() => {
         sidebarOpen.value = !e.matches;
     });
 
+    const savedWidth = localStorage.getItem("locode:sidebarWidth");
+    if (savedWidth) sidebarWidth.value = parseInt(savedWidth);
+
     const saved = localStorage.getItem("locode:currentFile");
     if (saved) loadFile(saved);
+
+    window.addEventListener("keydown", onKeyDown);
 });
+
+onBeforeUnmount(() => {
+    window.removeEventListener("keydown", onKeyDown);
+});
+
+function onKeyDown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (!currentFile.value) return;
+        savePressing.value = true;
+        saveFile();
+        setTimeout(() => savePressing.value = false, 200);
+    }
+}
+
+function onSelectRoot(path: string) {
+    rootPath.value = path;
+    localStorage.setItem("locode:rootPath", path);
+}
 
 function onSelectFile(path: string) {
     if (isMobile.value) sidebarOpen.value = false;
@@ -160,6 +267,11 @@ async function loadFile(path: string) {
     currentFile.value = path;
     localStorage.setItem("locode:currentFile", path);
     const res = await fetch("/api/read?path=" + path);
+    if (!res.ok) {
+        code.value = await res.text();
+        language.value = "plaintext";
+        return;
+    }
     language.value = detectLanguage(path);
     code.value = await res.text();
 }
@@ -173,17 +285,52 @@ async function saveFile() {
     });
 }
 
+const langMap: Record<string, string> = {
+    js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
+    ts: "typescript", tsx: "typescript", mts: "typescript",
+    vue: "html", svelte: "html", html: "html", htm: "html",
+    css: "css", scss: "scss", less: "less",
+    json: "json", jsonc: "json",
+    md: "markdown", mdx: "markdown",
+    py: "python", pyw: "python",
+    rs: "rust",
+    go: "go",
+    c: "c", h: "c",
+    cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp", hxx: "cpp",
+    cs: "csharp",
+    java: "java",
+    kt: "kotlin", kts: "kotlin",
+    swift: "swift",
+    rb: "ruby",
+    php: "php",
+    lua: "lua",
+    r: "r", R: "r",
+    hs: "haskell",
+    scala: "scala",
+    dart: "dart",
+    pl: "perl", pm: "perl",
+    sh: "shell", bash: "shell", zsh: "shell",
+    ps1: "powershell",
+    sql: "sql",
+    xml: "xml", xsl: "xml", xsd: "xml", svg: "xml",
+    yaml: "yaml", yml: "yaml",
+    toml: "toml",
+    ini: "ini", conf: "ini",
+    dockerfile: "dockerfile",
+    graphql: "graphql", gql: "graphql",
+    proto: "protobuf",
+    zig: "zig",
+    ex: "elixir", exs: "elixir",
+    erl: "erlang",
+    clj: "clojure", cljs: "clojure",
+    ml: "ocaml", mli: "ocaml",
+    fs: "fsharp", fsx: "fsharp",
+    tf: "hcl",
+    sol: "solidity",
+};
+
 function detectLanguage(path: string): string {
-    const ext = path.split(".").pop();
-    switch (ext) {
-        case "js": return "javascript";
-        case "ts": return "typescript";
-        case "vue": return "vue";
-        case "json": return "json";
-        case "html": return "html";
-        case "css": return "css";
-        case "md": return "markdown";
-        default: return "plaintext";
-    }
+    const ext = path.split(".").pop() || "";
+    return langMap[ext] || "plaintext";
 }
 </script>

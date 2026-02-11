@@ -81,8 +81,8 @@ DENO_PORT="8080"
 
 ## Ce qui a été fait
 
-- Éditeur Monaco avec coloration syntaxique (JS, TS, Vue, JSON, HTML, CSS, Markdown)
-- Détection automatique du langage selon l'extension du fichier
+- Éditeur Monaco avec coloration syntaxique (~50 langages : JS, TS, Vue, Python, Rust, Go, C/C++, Haskell, Java, Kotlin, Ruby, PHP, etc.)
+- Détection automatique du langage selon l'extension du fichier (table `langMap` extensible)
 - Explorateur de fichiers avec chargement lazy des sous-dossiers
 - Lecture et écriture de fichiers via API REST
 - Design glassmorphism avec fond animé en gradient (bleu/vert)
@@ -95,6 +95,25 @@ DENO_PORT="8080"
 - Persistance du fichier ouvert via `localStorage` (restauré après refresh)
 - Protection contre le rechargement inutile d'un fichier déjà ouvert
 - Poids de police progressif dans le file tree (medium → bold au hover → extra-bold pour le fichier actif)
+- Persistance du worktree (dossiers ouverts) dans `localStorage` — restaurés récursivement après refresh
+- Sidebar redimensionnable sur desktop via drag du bord droit (largeur persistée dans `localStorage`, min 150px / max 500px)
+- Transition fluide sur la largeur de la sidebar (désactivée pendant le drag pour réactivité)
+- Noms de fichiers sur une seule ligne avec coupure visuelle (overflow hidden, pas d'ellipsis)
+- Éditeur Monaco affiché immédiatement avec fond `#1e1e1e` (même couleur que le thème vs-dark) avant le chargement du contenu
+- Raccourci clavier `Ctrl+S` / `Cmd+S` pour sauvegarder le fichier avec animation visuelle sur le bouton Save
+- Correction de la coloration syntaxique des fichiers `.vue` (mappé vers le mode `html` de Monaco)
+- Sélecteur de dossier de travail (bouton "Open Folder" / "Select Folder") avec navigation dans `/home` (dossiers uniquement)
+- Bouton "Open" sur chaque dossier en mode browse pour le sélectionner comme racine de travail
+- Persistance du dossier de travail sélectionné dans `localStorage` — restauré après refresh
+- Première visite : affichage automatique du sélecteur de dossier
+- Retour au worktree de travail via Escape ou re-clic sur le bouton
+- Animations hover cohérentes sur tous les boutons (translateY -2px)
+- Chemin du fichier affiché en relatif par rapport au dossier de travail sélectionné
+- Troncature du chemin par le début (`...`) pour garder le nom du fichier visible sur mobile (CSS `direction: rtl` + `<bdo dir="ltr">`)
+- Tooltip sur le chemin du fichier pour afficher le chemin complet au survol
+- Protection contre les fichiers trop volumineux (max 5 MB) côté backend — retourne HTTP 413 au lieu de crasher
+- Gestion des erreurs de lecture côté frontend (message affiché dans l'éditeur en plaintext)
+- Proxy Nuxt refactorisé avec `proxyRequest` (h3) — streaming des réponses au lieu de bufferisation mémoire, relai correct des status codes HTTP
 
 ## Stack technique
 

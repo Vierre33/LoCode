@@ -1,15 +1,20 @@
 <template>
-    <ul class="ml-2">
+    <ul>
         <li v-for="node in nodes" :key="node.path">
-            <div class="node cursor-pointer py-1.5 px-2 rounded select-none"
+            <div class="node cursor-pointer p-1 rounded select-none flex items-center"
                 :class="{ active: node.path === file }"
                 @click="props.onClick(node)">
-                <span>
+                <span class="flex-1 min-w-0 overflow-hidden">
                     {{ node.type !== 'dir' ? "📄" : node.open ? "📂" : "📁" }} {{ node.name }}
                 </span>
+                <button v-if="onSelect && node.type === 'dir'"
+                    @click.stop="onSelect(node)"
+                    class="select-btn flex-shrink-0">
+                    Open
+                </button>
             </div>
-            <FileTree v-if="node.type === 'dir' && node.open" :nodes="node.children || []"
-                :file="file" :folder="folder" :onClick="onClick" />
+            <FileTree v-if="node.type === 'dir' && node.open" class="ml-4" :nodes="node.children || []"
+                :file="file" :folder="folder" :onClick="onClick" :onSelect="onSelect" />
         </li>
     </ul>
 </template>
@@ -18,7 +23,8 @@
 const props = defineProps<{
     file: string, folder: string,
     nodes: { name: string; path: string; type: "file" | "dir"; children?: any[]; open?: Boolean }[],
-    onClick: (node: any) => void
+    onClick: (node: any) => void,
+    onSelect?: (node: any) => void
 }>();
 </script>
 
@@ -27,6 +33,8 @@ const props = defineProps<{
     font-weight: 600;
     font-size: 0.85rem;
     transition: font-weight .1s ease;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .node:hover {
@@ -37,4 +45,22 @@ const props = defineProps<{
     font-weight: 800;
 }
 
+.select-btn {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    margin-left: 4px;
+    transition: .15s ease;
+}
+
+.select-btn:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.37);
+}
 </style>

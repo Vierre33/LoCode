@@ -8,11 +8,17 @@ type FileEntry = {
     // children?: FileEntry[];
 };
 
-async function readFile(path: string) {
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+async function readFile(path: string): Promise<{ content: string; status: number }> {
     try {
-        return await Deno.readTextFile(path);
+        const stat = await Deno.stat(path);
+        if (stat.size > MAX_FILE_SIZE) {
+            return { content: `File too large (${(stat.size / 1024 / 1024).toFixed(1)} MB). Max: 5 MB.`, status: 413 };
+        }
+        return { content: await Deno.readTextFile(path), status: 200 };
     } catch (e) {
-        return `Error reading file: ${e.message}`;
+        return { content: `Error reading file: ${e.message}`, status: 500 };
     }
 }
 
@@ -55,10 +61,8 @@ serve(async (req) => {
 
     if (req.method === "GET" && url.pathname === "/read") {
         const path = url.searchParams.get("path")!;
-        const contents = await readFile(path);
-        return new Response(contents, {
-            status: 200
-        });
+        const { content, status } = await readFile(path);
+        return new Response(content, { status });
     }
 
     if (req.method === "POST" && url.pathname === "/write") {
