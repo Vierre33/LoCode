@@ -65,9 +65,11 @@
 </style>
 
 <script setup lang="ts">
-const STORAGE_KEY = "locode:openFolders";
-
 const props = defineProps<{ file: string, rootPath: string }>();
+
+const storageKey = computed(() =>
+    props.rootPath ? `locode:openFolders:${props.rootPath}` : "locode:openFolders"
+);
 const emit = defineEmits<{
     (e: "select-file", path: string): void,
     (e: "select-root", path: string): void
@@ -97,7 +99,7 @@ function getOpenPaths(nodes: any[]): string[] {
 }
 
 function saveOpenFolders() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(getOpenPaths(tree.value)));
+    localStorage.setItem(storageKey.value, JSON.stringify(getOpenPaths(tree.value)));
 }
 
 async function restoreOpenFolders(nodes: any[], openPaths: Set<string>) {
@@ -112,7 +114,7 @@ async function restoreOpenFolders(nodes: any[], openPaths: Set<string>) {
 
 async function loadWorkTree() {
     tree.value = await loadTree(props.rootPath);
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(storageKey.value);
     if (saved) {
         try {
             const openPaths = new Set<string>(JSON.parse(saved));

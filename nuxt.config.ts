@@ -4,4 +4,7 @@ export default defineNuxtConfig({
     devtools: { enabled: false },
     modules: ['@nuxt/ui', '@nuxt/ui-pro', 'nuxt-svgo', 'nuxt-charts'],
     css: ['~/assets/css/main.css'],
+    nitro: {
+        experimental: { websocket: true },
+    },
 });

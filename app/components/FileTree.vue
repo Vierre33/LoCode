@@ -3,6 +3,8 @@
         <li v-for="node in nodes" :key="node.path">
             <div class="node cursor-pointer p-1 rounded select-none flex items-center"
                 :class="{ active: node.path === file }"
+                :draggable="node.type === 'file'"
+                @dragstart="e => { if (node.type === 'file') e.dataTransfer?.setData('text/plain', node.path) }"
                 @click="props.onClick(node)">
                 <span class="flex-1 min-w-0 overflow-hidden">
                     {{ node.type !== 'dir' ? "📄" : node.open ? "📂" : "📁" }} {{ node.name }}

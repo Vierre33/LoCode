@@ -16,9 +16,9 @@ logs
 # Misc
 .DS_Store
 .fleet
-.idea
+.idea/home/py/delivery/LoCode/package.json$0
 
-# Local env files
+# Local env files/home/py/delivery/LoCode/.env$0
 .env
 .env.*
 !.env.example

@@ -10,21 +10,38 @@
 
         <!-- Sidebar -->
         <div class="sidebar" :class="{ open: sidebarOpen, 'no-transition': isResizing }" :style="sidebarStyle">
-            <FileExplorer @select-file="onSelectFile" @select-root="onSelectRoot" :file="currentFile" :rootPath="rootPath" />
+            <FileExplorer @select-file="onSelectFile" @select-root="onSelectRoot"
+                :file="activePane?.filePath || ''" :rootPath="rootPath" />
             <div v-if="!isMobile" class="resize-handle" @mousedown.prevent="startResize" />
         </div>
 
         <!-- Editor panel -->
         <div class="flex-1 flex flex-col gap-2 min-w-0" :class="{ 'pointer-events-none': isResizing }">
             <div class="header-bar flex items-center gap-2">
-                <span v-if="currentFile" class="file-label font-bold" :title="displayPath"><bdo dir="ltr">{{ displayPath }}</bdo></span>
-                <button @click="saveFile" class="btn ml-auto" :class="{ 'btn-press': savePressing }" :disabled="!currentFile">Save</button>
-                <img src="/logo.svg" alt="LoCode" class="logo" />
+                <span v-if="activePane?.filePath" class="file-label font-bold" :title="displayPath">
+                    <bdo dir="ltr">{{ activeDirty ? '* ' : '' }}{{ displayPath }}</bdo>
+                </span>
+                <button @click="saveActivePane" class="btn ml-auto" :class="{ 'btn-press': savePressing }"
+                    :disabled="!activePane?.filePath">Save</button>
+                <img src="/logo.svg" alt="LoCode" class="logo logo-btn" @click="terminalOpen = !terminalOpen"
+                    :class="{ active: terminalOpen }" />
             </div>
-            <div class="flex-1 editor-area">
-                <MonacoEditor v-model="code" :language="language" />
+            <div class="flex-1 min-h-0 flex flex-col gap-2">
+                <div class="flex-1 min-h-0">
+                    <EditorArea :panes="panes" :activePaneId="activePaneId" :isMobile="isMobile"
+                        @update:pane="onUpdatePane" @set-active="activePaneId = $event"
+                        @drop="onEditorDrop" @close-pane="onClosePane" />
+                </div>
+                <TerminalPanel v-if="terminalOpen" :key="rootPath" :rootPath="rootPath"
+                    :isMobile="isMobile" :initialCount="terminalSessionCount"
+                    :initialSplitIndex="terminalSplitIndex"
+                    @update:sessionCount="terminalSessionCount = $event"
+                    @update:splitIndex="terminalSplitIndex = $event" />
             </div>
         </div>
+
+        <UnsavedDialog :show="showUnsavedDialog" :fileName="unsavedFileName"
+            @save="onDialogSave" @discard="onDialogDiscard" @cancel="showUnsavedDialog = false" />
     </div>
 </template>
 
@@ -177,33 +194,97 @@
     border-radius: 6px;
 }
 
-.editor-area {
-    background: #1e1e1e;
-    border-radius: 5px;
-    overflow: hidden;
+.logo-btn {
+    cursor: pointer;
+    transition: .2s ease;
+    border: 2px solid transparent;
+}
+
+.logo-btn:hover {
+    transform: translateY(-2px);
+}
+
+.logo-btn.active {
+    border-color: rgba(100, 180, 255, 0.5);
+    box-shadow: 0 0 12px rgba(100, 180, 255, 0.2);
 }
 </style>
 
 <script setup lang="ts">
+import type { EditorPane } from '~/components/EditorArea.vue';
+
+// --- Workspace state persistence ---
+interface WorkspaceState {
+    paneFiles: string[];
+    activePaneIndex: number;
+    terminalOpen: boolean;
+    terminalCount: number;
+    terminalSplitIndex: number;
+}
+
+function workspaceKey(path: string) {
+    return `locode:workspace:${path}`;
+}
+
+function saveWorkspaceState(path: string, state: WorkspaceState) {
+    if (!path) return;
+    localStorage.setItem(workspaceKey(path), JSON.stringify(state));
+}
+
+function loadWorkspaceState(path: string): WorkspaceState | null {
+    if (!path) return null;
+    try {
+        const raw = localStorage.getItem(workspaceKey(path));
+        if (raw) return JSON.parse(raw) as WorkspaceState;
+    } catch {}
+    return null;
+}
+
 const rootPath = ref(
     import.meta.client ? localStorage.getItem("locode:rootPath") || "" : ""
 );
-const code = ref("");
-const currentFile = ref("");
-const language = ref("");
 const sidebarOpen = ref(false);
 const sidebarWidth = ref(250);
 const isResizing = ref(false);
 const savePressing = ref(false);
-
 const isMobile = ref(false);
+const terminalOpen = ref(false);
+const terminalSessionCount = ref(1);
+const terminalSplitIndex = ref(-1);
+
+// --- Pane state ---
+const panes = ref<EditorPane[]>([
+    { id: "main", filePath: "", code: "", savedCode: "", language: "" }
+]);
+const activePaneId = ref("main");
+
+const activePane = computed(() => panes.value.find(p => p.id === activePaneId.value));
+const activeDirty = computed(() => {
+    const p = activePane.value;
+    return p ? p.filePath !== "" && p.code !== p.savedCode : false;
+});
+
+// --- Unsaved dialog ---
+const showUnsavedDialog = ref(false);
+const unsavedFileName = computed(() => {
+    const p = activePane.value;
+    if (!p) return "";
+    return p.filePath.split("/").pop() || p.filePath;
+});
+
+type PendingAction =
+    | { type: "select"; path: string }
+    | { type: "drop"; zone: "left" | "center" | "right"; path: string }
+    | { type: "close"; paneId: string };
+let pendingAction: PendingAction | null = null;
 
 const displayPath = computed(() => {
-    if (!currentFile.value) return "";
-    if (rootPath.value && currentFile.value.startsWith(rootPath.value)) {
-        return currentFile.value.slice(rootPath.value.length + 1);
+    const p = activePane.value;
+    if (!p || !p.filePath) return "";
+    if (rootPath.value && p.filePath.startsWith(rootPath.value)) {
+        return p.filePath.slice(rootPath.value.length + 1);
     }
-    return currentFile.value;
+    return p.filePath;
 });
 
 const sidebarStyle = computed(() => {
@@ -211,6 +292,7 @@ const sidebarStyle = computed(() => {
     return { "--sw": sidebarWidth.value + "px" };
 });
 
+// --- Sidebar resize ---
 function startResize(e: MouseEvent) {
     isResizing.value = true;
     document.body.style.cursor = "col-resize";
@@ -240,17 +322,30 @@ function onMediaChange(e: MediaQueryListEvent) {
     sidebarOpen.value = !e.matches;
 }
 
+function onBeforeUnload() {
+    if (rootPath.value) {
+        saveWorkspaceState(rootPath.value, getCurrentWorkspaceState());
+    }
+}
+
 onMounted(() => {
     mq = window.matchMedia("(max-width: 767px)");
     isMobile.value = mq.matches;
     sidebarOpen.value = !mq.matches;
     mq.addEventListener("change", onMediaChange);
+    window.addEventListener("beforeunload", onBeforeUnload);
 
     const savedWidth = localStorage.getItem("locode:sidebarWidth");
     if (savedWidth) sidebarWidth.value = parseInt(savedWidth);
 
-    const saved = localStorage.getItem("locode:currentFile");
-    if (saved) loadFile(saved);
+    // Restore workspace state for current rootPath
+    if (rootPath.value) {
+        restoreWorkspace(rootPath.value);
+    } else {
+        // Fallback: legacy single-file restore
+        const saved = localStorage.getItem("locode:currentFile");
+        if (saved) loadFileIntoPane("main", saved);
+    }
 
     window.addEventListener("keydown", onKeyDown);
 });
@@ -259,58 +354,259 @@ onBeforeUnmount(() => {
     mq?.removeEventListener("change", onMediaChange);
     resizeCleanup?.();
     window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("beforeunload", onBeforeUnload);
+    // Save workspace state on unmount
+    if (rootPath.value) {
+        saveWorkspaceState(rootPath.value, getCurrentWorkspaceState());
+    }
 });
 
 function onKeyDown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
-        if (!currentFile.value) return;
+        if (!activePane.value?.filePath) return;
         savePressing.value = true;
-        saveFile();
+        saveActivePane();
         setTimeout(() => savePressing.value = false, 200);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "j") {
+        e.preventDefault();
+        terminalOpen.value = !terminalOpen.value;
     }
 }
 
+// --- Pane helpers ---
+function isPaneDirty(pane: EditorPane): boolean {
+    return pane.filePath !== "" && pane.code !== pane.savedCode;
+}
+
+function onUpdatePane(paneId: string, field: string, value: string) {
+    const pane = panes.value.find(p => p.id === paneId);
+    if (pane) (pane as any)[field] = value;
+}
+
+// --- Workspace helpers ---
+function getCurrentWorkspaceState(): WorkspaceState {
+    return {
+        paneFiles: panes.value.map(p => p.filePath),
+        activePaneIndex: panes.value.findIndex(p => p.id === activePaneId.value),
+        terminalOpen: terminalOpen.value,
+        terminalCount: terminalSessionCount.value,
+        terminalSplitIndex: terminalSplitIndex.value,
+    };
+}
+
+async function restoreWorkspace(path: string) {
+    const state = loadWorkspaceState(path);
+    if (state) {
+        terminalOpen.value = state.terminalOpen;
+        terminalSessionCount.value = Math.max(1, state.terminalCount || 1);
+        terminalSplitIndex.value = state.terminalSplitIndex ?? -1;
+
+        const files = state.paneFiles || [];
+        if (files.length === 2 && files[0] && files[1]) {
+            panes.value = [
+                { id: "left", filePath: "", code: "", savedCode: "", language: "" },
+                { id: "right", filePath: "", code: "", savedCode: "", language: "" },
+            ];
+            activePaneId.value = state.activePaneIndex === 1 ? "right" : "left";
+            await Promise.all([
+                loadFileIntoPane("left", files[0]),
+                loadFileIntoPane("right", files[1]),
+            ]);
+        } else if (files.length >= 1 && files[0]) {
+            panes.value = [{ id: "main", filePath: "", code: "", savedCode: "", language: "" }];
+            activePaneId.value = "main";
+            await loadFileIntoPane("main", files[0]);
+        } else {
+            panes.value = [{ id: "main", filePath: "", code: "", savedCode: "", language: "" }];
+            activePaneId.value = "main";
+        }
+    } else {
+        // No saved state — reset to defaults
+        panes.value = [{ id: "main", filePath: "", code: "", savedCode: "", language: "" }];
+        activePaneId.value = "main";
+        terminalOpen.value = false;
+        terminalSessionCount.value = 1;
+        terminalSplitIndex.value = -1;
+    }
+}
+
+// --- File selection ---
 function onSelectRoot(path: string) {
+    // Save current workspace state before switching
+    if (rootPath.value) {
+        saveWorkspaceState(rootPath.value, getCurrentWorkspaceState());
+    }
     rootPath.value = path;
     localStorage.setItem("locode:rootPath", path);
+    restoreWorkspace(path);
 }
 
 function onSelectFile(path: string) {
     if (isMobile.value) sidebarOpen.value = false;
-    loadFile(path);
+    const p = activePane.value;
+    if (p && p.filePath === path) return;
+    if (p && isPaneDirty(p)) {
+        pendingAction = { type: "select", path };
+        showUnsavedDialog.value = true;
+        return;
+    }
+    loadFileIntoPane(activePaneId.value, path);
 }
 
-async function loadFile(path: string) {
-    currentFile.value = path;
-    localStorage.setItem("locode:currentFile", path);
+// --- Drop handling ---
+function onEditorDrop(zone: "left" | "center" | "right", filePath: string, force = false) {
+    if (zone === "center") {
+        // With 2 panes, center drop collapses to single pane
+        if (panes.value.length === 2) {
+            if (!force && panes.value.some(p => isPaneDirty(p))) {
+                pendingAction = { type: "drop", zone, path: filePath };
+                showUnsavedDialog.value = true;
+                return;
+            }
+            panes.value = [{ id: "main", filePath: "", code: "", savedCode: "", language: "" }];
+            activePaneId.value = "main";
+            loadFileIntoPane("main", filePath);
+        } else {
+            const p = activePane.value;
+            if (!force && p && isPaneDirty(p)) {
+                pendingAction = { type: "drop", zone, path: filePath };
+                showUnsavedDialog.value = true;
+                return;
+            }
+            loadFileIntoPane(activePaneId.value, filePath);
+        }
+    } else if (zone === "left") {
+        if (panes.value.length === 1) {
+            const existing = panes.value[0]!;
+            existing.id = "right";
+            const newPane: EditorPane = { id: "left", filePath: "", code: "", savedCode: "", language: "" };
+            panes.value = [newPane, existing];
+            activePaneId.value = "left";
+            loadFileIntoPane("left", filePath);
+        } else {
+            const left = panes.value[0]!;
+            if (!force && isPaneDirty(left)) {
+                pendingAction = { type: "drop", zone, path: filePath };
+                activePaneId.value = "left";
+                showUnsavedDialog.value = true;
+                return;
+            }
+            loadFileIntoPane("left", filePath);
+            activePaneId.value = "left";
+        }
+    } else {
+        if (panes.value.length === 1) {
+            const newPane: EditorPane = { id: "right", filePath: "", code: "", savedCode: "", language: "" };
+            panes.value.push(newPane);
+            activePaneId.value = "right";
+            loadFileIntoPane("right", filePath);
+        } else {
+            const right = panes.value[1]!;
+            if (!force && isPaneDirty(right)) {
+                pendingAction = { type: "drop", zone, path: filePath };
+                activePaneId.value = "right";
+                showUnsavedDialog.value = true;
+                return;
+            }
+            loadFileIntoPane("right", filePath);
+            activePaneId.value = "right";
+        }
+    }
+}
+
+function onClosePane(paneId: string) {
+    const pane = panes.value.find(p => p.id === paneId);
+    if (!pane) return;
+    if (isPaneDirty(pane)) {
+        activePaneId.value = paneId;
+        pendingAction = { type: "close", paneId };
+        showUnsavedDialog.value = true;
+        return;
+    }
+    doClosePane(paneId);
+}
+
+function doClosePane(paneId: string) {
+    const remaining = panes.value.find(p => p.id !== paneId);
+    if (remaining) {
+        remaining.id = "main";
+        panes.value = [remaining];
+        activePaneId.value = "main";
+    }
+}
+
+// --- Dialog handlers ---
+async function onDialogSave() {
+    showUnsavedDialog.value = false;
+    await savePaneFile(activePaneId.value);
+    executePendingAction();
+}
+
+function onDialogDiscard() {
+    showUnsavedDialog.value = false;
+    executePendingAction();
+}
+
+function executePendingAction() {
+    if (!pendingAction) return;
+    const action = pendingAction;
+    pendingAction = null;
+
+    if (action.type === "select") {
+        loadFileIntoPane(activePaneId.value, action.path);
+    } else if (action.type === "drop") {
+        onEditorDrop(action.zone, action.path, true);
+    } else if (action.type === "close") {
+        doClosePane(action.paneId);
+    }
+}
+
+// --- File I/O ---
+async function loadFileIntoPane(paneId: string, path: string) {
+    const pane = panes.value.find(p => p.id === paneId);
+    if (!pane) return;
+
+    pane.filePath = path;
+
     try {
         const res = await fetch("/api/read?path=" + path);
         if (!res.ok) {
-            code.value = await res.text();
-            language.value = "plaintext";
+            const text = await res.text();
+            pane.code = text;
+            pane.savedCode = text;
+            pane.language = "plaintext";
             return;
         }
-        language.value = detectLanguage(path);
-        code.value = await res.text();
+        pane.language = detectLanguage(path);
+        const text = await res.text();
+        pane.code = text;
+        pane.savedCode = text;
     } catch {
-        code.value = "Network error: unable to load file";
-        language.value = "plaintext";
+        pane.code = "Network error: unable to load file";
+        pane.savedCode = pane.code;
+        pane.language = "plaintext";
     }
 }
 
 let isSaving = false;
 
-async function saveFile() {
-    if (!currentFile.value || isSaving) return;
+async function savePaneFile(paneId: string) {
+    const pane = panes.value.find(p => p.id === paneId);
+    if (!pane || !pane.filePath || isSaving) return;
     isSaving = true;
     try {
         const res = await fetch("/api/write", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: currentFile.value, content: code.value }),
+            body: JSON.stringify({ path: pane.filePath, content: pane.code }),
         });
-        if (!res.ok) console.error("Save failed:", await res.text());
+        if (!res.ok) {
+            console.error("Save failed:", await res.text());
+        } else {
+            pane.savedCode = pane.code;
+        }
     } catch {
         console.error("Network error: unable to save file");
     } finally {
@@ -318,6 +614,11 @@ async function saveFile() {
     }
 }
 
+function saveActivePane() {
+    savePaneFile(activePaneId.value);
+}
+
+// --- Language detection ---
 const langMap: Record<string, string> = {
     js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
     ts: "typescript", tsx: "typescript", mts: "typescript",

@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: "update:modelValue", value: string): void;
+    (e: "focus"): void;
 }>();
 
 const { $monaco } = useNuxtApp();
@@ -35,6 +36,10 @@ onMounted(async () => {
         contentDisposable = editor.onDidChangeModelContent(() => {
             const value = editor!.getValue();
             emit("update:modelValue", value);
+        });
+
+        editor.onDidFocusEditorWidget(() => {
+            emit("focus");
         });
     }
 });
