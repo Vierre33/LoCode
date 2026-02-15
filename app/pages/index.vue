@@ -248,8 +248,7 @@
 }
 
 .file-label:hover {
-    transform: translateY(-1px);
-    color: rgba(255, 255, 255, 0.8);
+    color: white;
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.37);
 }

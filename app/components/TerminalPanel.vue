@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
     padding: 4px 6px;
     border-radius: 3px;
     cursor: grab;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.75);
     transition: .1s ease;
     white-space: nowrap;
     overflow: hidden;
@@ -487,7 +487,8 @@ onBeforeUnmount(() => {
 
 .terminal-tab:hover {
     color: white;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.37);
 }
 
 .terminal-tab.active {
@@ -523,7 +524,8 @@ onBeforeUnmount(() => {
 
 .sidebar-btn:hover {
     color: white;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.37);
 }
 
 .sidebar-btn.danger:hover {

@@ -40,11 +40,11 @@ const props = defineProps<{
 }
 
 .node:hover {
-    font-weight: 800;
+    font-weight: 700;
 }
 
 .node.active {
-    font-weight: 800;
+    font-weight: 700;
 }
 
 .select-btn {
@@ -61,7 +61,7 @@ const props = defineProps<{
 }
 
 .select-btn:hover {
-    transform: translateY(-2px);
+    /* transform: translateY(-2px); */
     background: rgba(255, 255, 255, 0.25);
     border-color: rgba(255, 255, 255, 0.37);
 }
