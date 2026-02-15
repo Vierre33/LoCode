@@ -22,10 +22,6 @@ logs
 .env
 .env.*
 !.env.example
-<<<<<<< HEAD
 
 # DB files
 images
-=======
-images
->>>>>>> back

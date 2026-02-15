@@ -6,7 +6,7 @@ Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduct
 
 Make sure to install dependencies:
 
-```bash
+```bash/home/py/delivery/LoCode/README.md$0
 # npm
 npm install
 
@@ -17,13 +17,13 @@ pnpm install
 yarn install
 
 # bun
-bun install
+bun install/home/py/delivery/LoCode/.gitignore$0
 ```
 
 ## Development Server
 
 Start the development server on `http://localhost:3000`:
-
+/home/py/delivery/LoCode/README.md$0
 ```bash
 # npm
 npm run dev

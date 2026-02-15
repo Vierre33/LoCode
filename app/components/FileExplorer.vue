@@ -4,7 +4,7 @@
             {{ browsing ? 'Select Folder' : 'Open Folder' }}
         </button>
         <div class="overflow-y-auto overflow-x-hidden flex-1 p-1">
-            <FileTree :nodes="tree" :file="file" :folder="folder" :onClick="click"
+            <FileTree :nodes="tree" :openFiles="openFiles" :folder="folder" :onClick="click"
                 :onSelect="browsing ? selectFolder : undefined" />
         </div>
     </div>
@@ -35,7 +35,7 @@
     width: calc(100% - 12px);
     margin: 6px;
     padding: 5px 8px;
-    font-size: 0.78rem;
+    font-size: 0.88rem;
     font-weight: 700;
     cursor: pointer;
     background: rgba(255, 255, 255, 0.1);
@@ -56,12 +56,20 @@
 .browse-btn:active {
     transform: scale(0.97);
 }
+
+@media (max-width: 767px) {
+    .browse-btn {
+        font-size: 0.75rem;
+    }
+}
 </style>
 
 <script setup lang="ts">
-const STORAGE_KEY = "locode:openFolders";
+const props = defineProps<{ openFiles: string[], rootPath: string }>();
 
-const props = defineProps<{ file: string, rootPath: string }>();
+const storageKey = computed(() =>
+    props.rootPath ? `locode:openFolders:${props.rootPath}` : "locode:openFolders"
+);
 const emit = defineEmits<{
     (e: "select-file", path: string): void,
     (e: "select-root", path: string): void
@@ -91,22 +99,22 @@ function getOpenPaths(nodes: any[]): string[] {
 }
 
 function saveOpenFolders() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(getOpenPaths(tree.value)));
+    localStorage.setItem(storageKey.value, JSON.stringify(getOpenPaths(tree.value)));
 }
 
 async function restoreOpenFolders(nodes: any[], openPaths: Set<string>) {
-    for (const node of nodes) {
-        if (node.type === "dir" && openPaths.has(node.path)) {
+    await Promise.all(
+        nodes.filter(n => n.type === "dir" && openPaths.has(n.path)).map(async (node) => {
             node.open = true;
             node.children = await loadTree(node.path);
             await restoreOpenFolders(node.children, openPaths);
-        }
-    }
+        })
+    );
 }
 
 async function loadWorkTree() {
     tree.value = await loadTree(props.rootPath);
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(storageKey.value);
     if (saved) {
         try {
             const openPaths = new Set<string>(JSON.parse(saved));
