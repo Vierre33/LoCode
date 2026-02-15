@@ -114,6 +114,15 @@ DENO_PORT="8080"
 - Protection contre les fichiers trop volumineux (max 5 MB) côté backend — retourne HTTP 413 au lieu de crasher
 - Gestion des erreurs de lecture côté frontend (message affiché dans l'éditeur en plaintext)
 - Proxy Nuxt refactorisé avec `proxyRequest` (h3) — streaming des réponses au lieu de bufferisation mémoire, relai correct des status codes HTTP
+- Sécurité backend : protection path traversal (`isPathAllowed` vérifie que les chemins restent sous `/home`), validation des inputs (null check, type check), messages d'erreur génériques (pas de leak d'infos système), try-catch global sur le handler `serve()`
+- Validation POST `/write` : JSON parsing protégé, vérification des types `path` et `content`, status 500 en cas d'erreur d'écriture (au lieu de 200)
+- Headers `Content-Type: text/plain` sur toutes les réponses texte du backend
+- Correction memory leaks frontend : cleanup du listener `MediaQueryList`, cleanup des listeners resize si unmount pendant un drag, dispose du listener `onDidChangeModelContent` de Monaco
+- Watcher de `language` séparé dans MonacoEditor — le changement de coloration syntaxique s'applique indépendamment du changement de contenu
+- Restauration parallèle des dossiers ouverts (`Promise.all` au lieu de boucle séquentielle)
+- Error handling sur `loadFile()` et `saveFile()` : try-catch réseau, vérification `res.ok`, mutex anti-spam sur save
+- Gestion du `<head>` via `useHead()` de Nuxt (titre + viewport) au lieu de tags HTML bruts dans le template
+- Polices adaptatives mobile : tailles réduites sur mobile (file tree, file label, boutons, Monaco Editor 12px vs 15px desktop)
 
 ## Stack technique
 

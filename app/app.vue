@@ -1,7 +1,5 @@
 <template>
     <div>
-        <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
-        <title>LoCode</title>
         <div class="bg" />
         <div class="bg bg2" />
         <div class="bg bg3" />
@@ -45,5 +43,11 @@
     }
 </style>
 
-<script>
+<script setup lang="ts">
+useHead({
+    title: "LoCode",
+    meta: [
+        { name: "viewport", content: "width=device-width, initial-scale=1, interactive-widget=resizes-content" },
+    ]
+});
 </script>
