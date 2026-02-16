@@ -95,7 +95,7 @@ let savedSplit: { left: string; right: string } | null = null;
 const contentRef = ref<HTMLElement | null>(null);
 
 const panelHeight = ref(
-    import.meta.client ? parseInt(localStorage.getItem("locode:terminalHeight") || "250") : 250
+    import.meta.client ? parseInt(localStorage.getItem("locode:terminalHeight") || "254") : 254
 );
 
 // --- Terminal refs for focus ---

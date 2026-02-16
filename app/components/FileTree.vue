@@ -17,7 +17,7 @@
                     Open
                 </button>
             </div>
-            <div class="tooltip-spacer" :class="{ open: hoveredPath === node.path }"></div>
+            <div class="tooltip-spacer" :class="{ open: hoveredRawPath === node.path }"></div>
             <FileTree v-if="node.type === 'dir' && node.open" class="ml-5" :nodes="node.children || []"
                 :openFiles="openFiles" :folder="folder" :onClick="onClick" :onSelect="onSelect" />
         </li>
@@ -32,7 +32,7 @@ const props = defineProps<{
     onSelect?: (node: any) => void
 }>();
 
-const hoveredPath = inject<Ref<string>>("hoveredPath")!;
+const hoveredRawPath = inject<Ref<string>>("hoveredRawPath")!;
 const showTooltip = inject<(path: string, rect: DOMRect) => void>("showTooltip");
 const hideTooltip = inject<() => void>("hideTooltip");
 
@@ -60,7 +60,7 @@ function onLeave() {
 
 .node {
     font-weight: 500;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     transition: font-weight .1s ease;
     white-space: nowrap;
     color: rgba(255, 255, 255, 0.9);
@@ -112,7 +112,7 @@ function onLeave() {
 
 @media (max-width: 767px) {
     .node {
-        font-size: 0.8rem;
+        /* font-size: 0.8rem; */
         font-weight: 500;
     }
 }

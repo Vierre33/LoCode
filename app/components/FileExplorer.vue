@@ -104,12 +104,15 @@ const folder = ref("");
 const browsing = ref(!props.rootPath);
 
 // --- Tooltip ---
-const hoveredPath = ref("");
+const hoveredRawPath = ref("");
+const hoveredPath = computed(() =>
+    hoveredRawPath.value.replace(/^\/home\/[^/]+/, "~")
+);
 const tooltipStyle = ref<Record<string, string>>({});
-provide("hoveredPath", hoveredPath);
+provide("hoveredRawPath", hoveredRawPath);
 
 provide("showTooltip", (path: string, rect: DOMRect) => {
-    hoveredPath.value = path.replace(/^\/home\/[^/]+/, "~");
+    hoveredRawPath.value = path;
     tooltipStyle.value = {
         top: rect.bottom + 4 + "px",
         left: rect.left + "px",
@@ -117,7 +120,7 @@ provide("showTooltip", (path: string, rect: DOMRect) => {
 });
 
 provide("hideTooltip", () => {
-    hoveredPath.value = "";
+    hoveredRawPath.value = "";
 });
 
 async function loadTree(path: string, dirsOnly = false): Promise<any[]> {
