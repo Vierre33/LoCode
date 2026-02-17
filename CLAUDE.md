@@ -197,6 +197,25 @@ DENO_PORT="8080"
 - Nombre de terminaux et index de split sauvegardés par workspace
 - Restauration complète au changement de workspace ou refresh
 
+### Loading overlay
+- Overlay plein écran glassmorphism affiché au démarrage : blur 20px, carte centrée, logo pulsant, barre de progression, messages rotatifs
+- Messages bullshit défilent via CSS pur (`@keyframes rotate` sur chaque span avec `animationDelay: i * 2s`) — pas de setInterval
+- `messageIndex` via `useState('loaderMsgIdx')` : calculé une fois côté serveur, sérialisé dans le payload HTML, réutilisé à l'identique côté client → zéro hydration mismatch
+- Overlay visible dès le premier octet HTML (SSR), caché via `loading = false` dans `onMounted`
+- Fade-out via `<Transition name="loader-fade">` (opacity 0.4s ease)
+
+### Animations boutons
+- Bouton close (×) dans l'éditeur et les terminaux : `<span class="close-icon">` avec `transform: rotate(90deg)` au hover, transition spring `cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s` — seul le texte tourne, pas le fond
+- Bouton + des terminaux : `<span class="add-icon">` avec `rotate(90deg) scale(1.15)` au hover, même transition spring
+
+### Dialog modifications non sauvegardées — fade-in
+- `UnsavedDialog.vue` : `.modal-enter-active` animé avec `backdrop-fade-in` (opacity 0 → 1 en 0.25s)
+- Apparition et disparition toutes deux animées (symétrique)
+
+### Monaco workers
+- `app/plugins/monaco.client.ts` : imports directs des web workers Monaco (`editor.worker`, `json.worker`, `css.worker`, `html.worker`, `ts.worker`)
+- `self.MonacoEnvironment.getWorker` défini pour router chaque langage vers le bon worker — élimine les erreurs console "You must define MonacoEnvironment.getWorkerUrl"
+
 ## Stack technique
 
 - **Nuxt** 4.1.0

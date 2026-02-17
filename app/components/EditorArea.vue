@@ -19,6 +19,16 @@
                     :modelValue="pane.code" :language="pane.language"
                     @update:modelValue="v => $emit('update:pane', pane.id, 'code', v)"
                     @focus="$emit('set-active', pane.id)" />
+                <Transition name="skeleton-fade">
+                    <div v-if="loadingPaneId === pane.id" class="pane-skeleton">
+                        <div class="skeleton-line" style="width: 45%"></div>
+                        <div class="skeleton-line" style="width: 72%"></div>
+                        <div class="skeleton-line" style="width: 30%"></div>
+                        <div class="skeleton-line" style="width: 60%"></div>
+                        <div class="skeleton-line" style="width: 80%"></div>
+                        <div class="skeleton-line" style="width: 55%"></div>
+                    </div>
+                </Transition>
             </div>
             <div v-if="panes.length === 2" class="split-handle" :style="{ left: splitRatio + '%' }"
                 @mousedown.prevent="startSplitResize" />
@@ -39,6 +49,7 @@ const props = defineProps<{
     panes: EditorPane[];
     activePaneId: string;
     isMobile: boolean;
+    loadingPaneId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -219,5 +230,49 @@ onBeforeUnmount(() => {
     background: rgba(100, 180, 255, 0.15);
     border-color: rgba(100, 180, 255, 0.4);
     color: rgba(255, 255, 255, 0.9);
+}
+
+/* --- Skeleton overlay --- */
+.pane-skeleton {
+    position: absolute;
+    inset: 0;
+    background: #1e1e1e;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.skeleton-line {
+    height: 13px;
+    border-radius: 4px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
+
+.skeleton-fade-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.skeleton-fade-leave-to {
+    opacity: 0;
+}
+
+/* Active pane blue accent */
+.pane {
+    transition: outline-color 0.15s ease;
+}
+
+.pane.active {
+    outline: 1px solid rgba(100, 180, 255, 0.35);
+    outline-offset: -1px;
 }
 </style>

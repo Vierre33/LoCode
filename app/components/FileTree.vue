@@ -18,7 +18,10 @@
                 </button>
             </div>
             <div class="tooltip-spacer" :class="{ open: hoveredRawPath === node.path }"></div>
-            <FileTree v-if="node.type === 'dir' && node.open" class="ml-5" :nodes="node.children || []"
+            <div v-if="node.loading" class="ml-5 loading-dots">
+                <span></span><span></span><span></span>
+            </div>
+            <FileTree v-else-if="node.type === 'dir' && node.open" class="ml-5" :nodes="node.children || []"
                 :openFiles="openFiles" :folder="folder" :onClick="onClick" :onSelect="onSelect" />
         </li>
     </ul>
@@ -27,7 +30,7 @@
 <script setup lang="ts">
 const props = defineProps<{
     openFiles: string[], folder: string,
-    nodes: { name: string; path: string; type: "file" | "dir"; children?: any[]; open?: Boolean }[],
+    nodes: { name: string; path: string; type: "file" | "dir"; children?: any[]; open?: Boolean; loading?: boolean }[],
     onClick: (node: any) => void,
     onSelect?: (node: any) => void
 }>();
@@ -118,4 +121,21 @@ function onLeave() {
         font-weight: 500;
     }
 }
+
+.loading-dots {
+    display: flex;
+    gap: 3px;
+    padding: 3px 2px;
+}
+
+.loading-dots span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    animation: dot-pulse 1s ease infinite;
+}
+
+.loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.30s; }
 </style>
