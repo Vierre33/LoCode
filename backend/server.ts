@@ -1,6 +1,5 @@
 // server.ts
 import { serve } from "https://deno.land/std@0.208.0/http/server.ts";
-import { resolve, normalize } from "https://deno.land/std@0.208.0/path/mod.ts";
 
 type FileEntry = {
     name: string;
@@ -9,13 +8,7 @@ type FileEntry = {
 };
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_ROOTS = ["/home"];
 const textHeaders = { "Content-Type": "text/plain; charset=utf-8" };
-
-function isPathAllowed(path: string): boolean {
-    const resolved = resolve(normalize(path));
-    return ALLOWED_ROOTS.some((root) => resolved.startsWith(root));
-}
 
 async function readFile(path: string): Promise<{ content: string; status: number }> {
     try {
@@ -43,7 +36,7 @@ async function writeFile(path: string, content: string): Promise<{ message: stri
 async function listDir(path: string): Promise<FileEntry[]> {
     const result: FileEntry[] = [];
     for await (const entry of Deno.readDir(path)) {
-        const fullPath = `${path}/${entry.name}`;
+        const fullPath = path === "/" ? `/${entry.name}` : `${path}/${entry.name}`;
         if (entry.isDirectory) {
             result.push({ name: entry.name, path: fullPath, type: "dir" });
         } else {
@@ -60,7 +53,6 @@ serve(async (req) => {
         if (req.method === "GET" && url.pathname === "/read") {
             const path = url.searchParams.get("path");
             if (!path) return new Response("Missing path parameter", { status: 400, headers: textHeaders });
-            if (!isPathAllowed(path)) return new Response("Access denied", { status: 403, headers: textHeaders });
             const { content, status } = await readFile(path);
             return new Response(content, { status, headers: textHeaders });
         }
@@ -74,16 +66,12 @@ serve(async (req) => {
             if (typeof path !== "string" || typeof content !== "string") {
                 return new Response("Invalid request: path and content must be strings", { status: 400, headers: textHeaders });
             }
-            if (!isPathAllowed(path)) return new Response("Access denied", { status: 403, headers: textHeaders });
             const { message, status } = await writeFile(path, content);
             return new Response(message, { status, headers: textHeaders });
         }
 
         if (req.method === "GET" && url.pathname === "/list") {
             const root = url.searchParams.get("path") || ".";
-            if (root !== "." && !isPathAllowed(root)) {
-                return new Response("Access denied", { status: 403, headers: textHeaders });
-            }
             const tree = await listDir(root);
             return new Response(JSON.stringify(tree), {
                 status: 200,
