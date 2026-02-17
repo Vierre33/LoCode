@@ -101,7 +101,7 @@ const emit = defineEmits<{
 
 const tree = ref<any[]>([]);
 const folder = ref("");
-const browsing = ref(!props.rootPath);
+const browsing = ref(false);
 
 // --- Tooltip ---
 const hoveredRawPath = ref("");
@@ -236,7 +236,8 @@ watch(() => props.rootPath, (newPath) => {
 });
 
 onMounted(async () => {
-    if (browsing.value) {
+    if (!props.rootPath) {
+        browsing.value = true;
         await loadBrowseTree();
     } else {
         await loadWorkTree();

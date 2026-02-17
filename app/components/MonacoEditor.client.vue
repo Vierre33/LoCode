@@ -19,8 +19,6 @@ const editorContainer = ref<HTMLDivElement | null>(null);
 let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
 let contentDisposable: import("monaco-editor").IDisposable | null = null;
 
-const isMobile = window.matchMedia("(max-width: 767px)").matches;
-
 onMounted(async () => {
     await nextTick();
 
@@ -30,7 +28,7 @@ onMounted(async () => {
             language: props.language,
             theme: "vs-dark",
             automaticLayout: true,
-            fontSize: isMobile ? 12 : 15,
+            fontSize: 12,
         });
 
         contentDisposable = editor.onDidChangeModelContent(() => {
