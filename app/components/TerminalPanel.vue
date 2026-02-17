@@ -8,8 +8,8 @@
                 @click="selectSession(s.id)">
                 {{ s.name }}
             </div>
-            <button class="sidebar-btn" @click="addSession">+</button>
-            <button class="sidebar-btn danger" @click="removeSession">&times;</button>
+            <button class="sidebar-btn add" @click="addSession"><span class="add-icon">+</span></button>
+            <button class="sidebar-btn danger" @click="removeSession"><span class="close-icon">&times;</span></button>
         </div>
         <div class="terminal-body">
             <div ref="contentRef" class="terminal-content"
@@ -45,8 +45,8 @@
                     {{ s.name }}
                 </div>
                 <div class="terminal-sidebar-actions">
-                    <button class="sidebar-btn" @click="addSession" title="New terminal">+</button>
-                    <button class="sidebar-btn danger" @click="removeSession" title="Close terminal">&times;</button>
+                    <button class="sidebar-btn add" @click="addSession" title="New terminal"><span class="add-icon">+</span></button>
+                    <button class="sidebar-btn danger" @click="removeSession" title="Close terminal"><span class="close-icon">&times;</span></button>
                 </div>
             </div>
         </div>
@@ -589,6 +589,24 @@ onBeforeUnmount(() => {
 .sidebar-btn.danger:hover {
     color: rgba(255, 255, 255, 0.9);
     background: rgba(220, 100, 100, 0.9);
+}
+
+.sidebar-btn .close-icon {
+    display: inline-block;
+    transition: transform .3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-btn.danger:hover .close-icon {
+    transform: rotate(90deg);
+}
+
+.sidebar-btn .add-icon {
+    display: inline-block;
+    transition: transform .3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-btn.add:hover .add-icon {
+    transform: rotate(90deg) scale(1.15);
 }
 
 .sidebar-btn:disabled {

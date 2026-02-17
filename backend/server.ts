@@ -37,11 +37,7 @@ async function listDir(path: string): Promise<FileEntry[]> {
     const result: FileEntry[] = [];
     for await (const entry of Deno.readDir(path)) {
         const fullPath = path === "/" ? `/${entry.name}` : `${path}/${entry.name}`;
-        if (entry.isDirectory) {
-            result.push({ name: entry.name, path: fullPath, type: "dir" });
-        } else {
-            result.push({ name: entry.name, path: fullPath, type: "file" });
-        }
+        result.push({ name: entry.name, path: fullPath, type: entry.isDirectory ? "dir" : "file" });
     }
     return result;
 }

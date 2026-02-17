@@ -4,7 +4,14 @@
             {{ browsing ? 'Select Folder' : 'Open Folder' }}
         </button>
         <div class="overflow-y-auto flex-1 p-1">
-            <FileTree :nodes="tree" :openFiles="openFiles" :folder="folder" :onClick="click"
+            <div v-if="treeLoading" class="tree-skeleton">
+                <div v-for="(node, i) in skeletonBlueprint" :key="i" class="skeleton-row"
+                    :style="{ paddingLeft: node.depth * 20 + 'px' }">
+                    <span class="skeleton-icon"></span>
+                    <div class="skeleton-node" :style="{ width: node.width + '%' }"></div>
+                </div>
+            </div>
+            <FileTree v-else :nodes="tree" :openFiles="openFiles" :folder="folder" :onClick="click"
                 :onSelect="browsing ? selectFolder : undefined" />
         </div>
         <Teleport to="body">
@@ -66,6 +73,48 @@
         font-size: 0.75rem;
     }
 }
+
+.tree-skeleton {
+    padding: 4px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.skeleton-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.07);
+    animation: shimmer 1.4s ease infinite;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+}
+
+.skeleton-node {
+    height: 12px;
+    border-radius: 3px;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.12) 50%,
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease infinite;
+}
 </style>
 
 <style lang="css">
@@ -102,6 +151,51 @@ const emit = defineEmits<{
 const tree = ref<any[]>([]);
 const folder = ref("");
 const browsing = ref(false);
+const treeLoading = ref(false);
+
+// --- Skeleton blueprint ---
+type SkeletonNode = { depth: number; type: string; width: number };
+const DEFAULT_SKELETON: SkeletonNode[] = [
+    { depth: 0, type: "dir", width: 55 },
+    { depth: 1, type: "file", width: 45 },
+    { depth: 1, type: "file", width: 50 },
+    { depth: 0, type: "dir", width: 60 },
+    { depth: 0, type: "file", width: 40 },
+];
+
+function readSkeletonFromStorage(): SkeletonNode[] {
+    if (!import.meta.client || !props.rootPath) return DEFAULT_SKELETON;
+    try {
+        const saved = localStorage.getItem(`locode:skeleton:${props.rootPath}`);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch {}
+    return DEFAULT_SKELETON;
+}
+
+const skeletonBlueprint = ref<SkeletonNode[]>(readSkeletonFromStorage());
+
+function flattenTree(nodes: any[], depth = 0): SkeletonNode[] {
+    const result: SkeletonNode[] = [];
+    for (const node of nodes) {
+        const nameLen = Math.min(node.name?.length || 5, 20);
+        result.push({ depth, type: node.type, width: 25 + nameLen * 3 });
+        if (node.type === "dir" && node.open && node.children) {
+            result.push(...flattenTree(node.children, depth + 1));
+        }
+    }
+    return result;
+}
+
+function saveSkeletonBlueprint() {
+    if (!props.rootPath) return;
+    const blueprint = flattenTree(tree.value);
+    if (blueprint.length > 0) {
+        localStorage.setItem(`locode:skeleton:${props.rootPath}`, JSON.stringify(blueprint));
+    }
+}
 
 // --- Tooltip ---
 const hoveredRawPath = ref("");
@@ -157,31 +251,42 @@ async function restoreOpenFolders(nodes: any[], openPaths: Set<string>) {
 }
 
 async function loadWorkTree() {
-    tree.value = await loadTree(props.rootPath);
-    const saved = localStorage.getItem(storageKey.value);
-    if (saved) {
-        try {
-            const openPaths = new Set<string>(JSON.parse(saved));
-            await restoreOpenFolders(tree.value, openPaths);
-        } catch {}
+    treeLoading.value = true;
+    try {
+        tree.value = await loadTree(props.rootPath);
+        const saved = localStorage.getItem(storageKey.value);
+        if (saved) {
+            try {
+                const openPaths = new Set<string>(JSON.parse(saved));
+                await restoreOpenFolders(tree.value, openPaths);
+            } catch {}
+        }
+        saveSkeletonBlueprint();
+    } finally {
+        treeLoading.value = false;
     }
 }
 
 async function loadBrowseTree() {
-    tree.value = await loadTree("/", true);
-    // Auto-expand path segments to user's home dir (e.g. / → home → py)
-    const homeNode = tree.value.find((n: any) => n.path === "/home");
-    if (!homeNode) return;
-    homeNode.open = true;
-    homeNode.children = await loadTree("/home", true);
-    // Detect user dir from rootPath, or fallback to first dir in /home
-    const userMatch = props.rootPath?.match(/^\/home\/([^/]+)/);
-    const userDir = userMatch
-        ? homeNode.children.find((n: any) => n.path === `/home/${userMatch[1]}`)
-        : homeNode.children[0];
-    if (userDir) {
-        userDir.open = true;
-        userDir.children = await loadTree(userDir.path, true);
+    treeLoading.value = true;
+    try {
+        tree.value = await loadTree("/", true);
+        // Auto-expand path segments to user's home dir (e.g. / → home → py)
+        const homeNode = tree.value.find((n: any) => n.path === "/home");
+        if (!homeNode) return;
+        homeNode.open = true;
+        homeNode.children = await loadTree("/home", true);
+        // Detect user dir from rootPath, or fallback to first dir in /home
+        const userMatch = props.rootPath?.match(/^\/home\/([^/]+)/);
+        const userDir = userMatch
+            ? homeNode.children.find((n: any) => n.path === `/home/${userMatch[1]}`)
+            : homeNode.children[0];
+        if (userDir) {
+            userDir.open = true;
+            userDir.children = await loadTree(userDir.path, true);
+        }
+    } finally {
+        treeLoading.value = false;
     }
 }
 
@@ -207,15 +312,22 @@ async function click(node: any) {
     if (browsing.value) {
         if (node.type === "dir") {
             node.open = !node.open;
-            if (node.open)
+            if (node.open) {
+                node.loading = true;
                 node.children = await loadTree(node.path, true);
+                node.loading = false;
+            }
         }
     } else {
         if (node.type !== "file") {
             node.open = !node.open;
-            if (node.open)
+            if (node.open) {
+                node.loading = true;
                 node.children = await loadTree(node.path);
+                node.loading = false;
+            }
             saveOpenFolders();
+            saveSkeletonBlueprint();
         } else
             emit("select-file", node.path);
     }
@@ -231,11 +343,14 @@ function onEscape(e: KeyboardEvent) {
 watch(() => props.rootPath, (newPath) => {
     if (newPath) {
         browsing.value = false;
+        skeletonBlueprint.value = readSkeletonFromStorage();
         loadWorkTree();
     }
 });
 
 onMounted(async () => {
+    skeletonBlueprint.value = readSkeletonFromStorage();
+    treeLoading.value = true;
     if (!props.rootPath) {
         browsing.value = true;
         await loadBrowseTree();

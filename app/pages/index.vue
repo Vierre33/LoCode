@@ -1,5 +1,11 @@
 <template>
     <div class="flex h-screen gap-2 p-2 relative">
+        <!-- Progress bar -->
+        <Transition name="progress-fade">
+            <div v-if="loadingPaneId" class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+        </Transition>
         <!-- Mobile hamburger toggle -->
         <button @click="sidebarOpen = !sidebarOpen" class="hamburger md:hidden">
             {{ sidebarOpen ? '✕' : '☰' }}
@@ -27,12 +33,13 @@
                             {{ isPaneDirty(pane) ? '* ' : '' }}{{ displayPaneName(pane) }}
                             <button v-if="pane.filePath" class="close-pane-btn"
                                 :class="{ active: pane.id === activePaneId }"
-                                @click.stop="onClosePane(pane.id)">&times;</button>
+                                @click.stop="onClosePane(pane.id)"><span class="close-icon">&times;</span></button>
                         </span>
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button @click="saveActivePane" class="btn" :class="{ 'btn-press': savePressing }"
+                    <button @click="saveActivePane" class="btn"
+                        :class="{ 'btn-press': savePressing, 'btn-success': saveSuccess }"
                         :disabled="!activePane?.filePath">Save</button>
                     <img src="/logo.svg" alt="LoCode" class="logo logo-btn" @click="terminalOpen ? closeTerminal() : openTerminal()"
                         :class="{ active: terminalOpen }" />
@@ -42,6 +49,7 @@
                 <div class="flex-1 min-h-0">
                     <EditorArea ref="editorAreaRef" :panes="panes"
                         :activePaneId="activePaneId" :isMobile="isMobile"
+                        :loadingPaneId="loadingPaneId"
                         @update:pane="onUpdatePane" @set-active="activePaneId = $event"
                         @drop="onEditorDrop" @close-pane="onClosePane" />
                 </div>
@@ -283,9 +291,63 @@
     background: rgba(220, 100, 100, 0.9);
 }
 
+.close-icon {
+    display: inline-block;
+    transition: transform .3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.close-pane-btn:hover .close-icon {
+    transform: rotate(90deg);
+}
+
 .close-pane-btn.active {
     color: rgba(255, 255, 255, 0.9);
     font-weight: 700;
+}
+
+/* --- Save success flash --- */
+.btn-success {
+    border-color: rgba(100, 200, 100, 0.6) !important;
+    box-shadow: 0 0 12px rgba(100, 200, 100, 0.25) !important;
+    transition: border-color 0.3s ease, box-shadow 0.6s ease !important;
+}
+
+/* --- Progress bar --- */
+.progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 200;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(100, 180, 255, 0.8), rgba(100, 220, 180, 0.8));
+    border-radius: 0 2px 2px 0;
+    animation: progress-crawl 2.5s cubic-bezier(0.1, 0.05, 0.6, 1) forwards;
+}
+
+@keyframes progress-crawl {
+    0%   { width: 0%; }
+    30%  { width: 60%; }
+    70%  { width: 78%; }
+    100% { width: 85%; }
+}
+
+.progress-fade-leave-active .progress-fill {
+    width: 100% !important;
+    transition: width 0.1s ease;
+}
+
+.progress-fade-leave-active {
+    transition: opacity 0.3s ease 0.1s;
+}
+
+.progress-fade-leave-to {
+    opacity: 0;
 }
 </style>
 
@@ -326,6 +388,8 @@ const sidebarOpen = ref(false);
 const sidebarWidth = ref(250);
 const isResizing = ref(false);
 const savePressing = ref(false);
+const saveSuccess = ref(false);
+const loadingPaneId = ref<string | null>(null);
 const isMobile = ref(false);
 const terminalOpen = ref(false);
 const terminalSessionCount = ref(1);
@@ -564,7 +628,7 @@ function onSelectRoot(path: string) {
 function onSelectFile(path: string) {
     if (isMobile.value) sidebarOpen.value = false;
     const p = activePane.value;
-    if (p && p.filePath === path) return;
+    // if (p && p.filePath === path) return;
     if (p && isPaneDirty(p)) {
         pendingAction = { type: "select", path };
         showUnsavedDialog.value = true;
@@ -696,6 +760,8 @@ async function loadFileIntoPane(paneId: string, path: string) {
 
     userEdited.delete(paneId);
     pane.filePath = path;
+    pane.language = detectLanguage(path);
+    loadingPaneId.value = paneId;
 
     try {
         const res = await fetch("/api/read?path=" + path);
@@ -706,7 +772,6 @@ async function loadFileIntoPane(paneId: string, path: string) {
             pane.language = "plaintext";
             return;
         }
-        pane.language = detectLanguage(path);
         const text = await res.text();
         pane.code = text;
         pane.savedCode = text;
@@ -714,6 +779,8 @@ async function loadFileIntoPane(paneId: string, path: string) {
         pane.code = "Network error: unable to load file";
         pane.savedCode = pane.code;
         pane.language = "plaintext";
+    } finally {
+        loadingPaneId.value = null;
     }
 }
 
@@ -741,8 +808,10 @@ async function savePaneFile(paneId: string) {
     }
 }
 
-function saveActivePane() {
-    savePaneFile(activePaneId.value);
+async function saveActivePane() {
+    await savePaneFile(activePaneId.value);
+    saveSuccess.value = true;
+    setTimeout(() => saveSuccess.value = false, 600);
 }
 
 // --- Language detection ---
