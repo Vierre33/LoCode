@@ -168,7 +168,21 @@ async function loadWorkTree() {
 }
 
 async function loadBrowseTree() {
-    tree.value = await loadTree("/home", true);
+    tree.value = await loadTree("/", true);
+    // Auto-expand path segments to user's home dir (e.g. / → home → py)
+    const homeNode = tree.value.find((n: any) => n.path === "/home");
+    if (!homeNode) return;
+    homeNode.open = true;
+    homeNode.children = await loadTree("/home", true);
+    // Detect user dir from rootPath, or fallback to first dir in /home
+    const userMatch = props.rootPath?.match(/^\/home\/([^/]+)/);
+    const userDir = userMatch
+        ? homeNode.children.find((n: any) => n.path === `/home/${userMatch[1]}`)
+        : homeNode.children[0];
+    if (userDir) {
+        userDir.open = true;
+        userDir.children = await loadTree(userDir.path, true);
+    }
 }
 
 function toggleBrowse() {
