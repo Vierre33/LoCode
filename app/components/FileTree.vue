@@ -36,6 +36,8 @@ const hoveredRawPath = inject<Ref<string>>("hoveredRawPath")!;
 const showTooltip = inject<(path: string, rect: DOMRect) => void>("showTooltip");
 const hideTooltip = inject<() => void>("hideTooltip");
 
+const isMobile = import.meta.client && window.matchMedia("(max-width: 767px)").matches;
+
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onEnter(e: MouseEvent, path: string) {
@@ -43,7 +45,7 @@ function onEnter(e: MouseEvent, path: string) {
     const el = e.currentTarget as HTMLElement;
     hoverTimer = setTimeout(() => {
         if (el) showTooltip?.(path, el.getBoundingClientRect());
-    }, 600);
+    }, isMobile ? 100 : 600);
 }
 
 function onLeave() {
