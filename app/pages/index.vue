@@ -6,6 +6,7 @@
                 <div class="progress-fill"></div>
             </div>
         </Transition>
+
         <!-- Mobile hamburger toggle -->
         <button @click="sidebarOpen = !sidebarOpen" class="hamburger md:hidden">
             {{ sidebarOpen ? '✕' : '☰' }}
@@ -41,8 +42,8 @@
                     <button @click="saveActivePane" class="btn"
                         :class="{ 'btn-press': savePressing, 'btn-success': saveSuccess }"
                         :disabled="!activePane?.filePath">Save</button>
-                    <img src="/logo.svg" alt="LoCode" class="logo logo-btn" @click="terminalOpen ? closeTerminal() : openTerminal()"
-                        :class="{ active: terminalOpen }" />
+                    <img src="/logo.svg" alt="LoCode" class="logo logo-btn" :class="{ active: terminalOpen }"
+                        @click="terminalOpen ? closeTerminal() : openTerminal()" />
                 </div>
             </div>
             <div class="flex-1 min-h-0 flex flex-col gap-2">

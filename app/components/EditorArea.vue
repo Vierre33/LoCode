@@ -20,13 +20,8 @@
                     @update:modelValue="v => $emit('update:pane', pane.id, 'code', v)"
                     @focus="$emit('set-active', pane.id)" />
                 <Transition name="skeleton-fade">
-                    <div v-if="loadingPaneId === pane.id" class="pane-skeleton">
-                        <div class="skeleton-line" style="width: 45%"></div>
-                        <div class="skeleton-line" style="width: 72%"></div>
-                        <div class="skeleton-line" style="width: 30%"></div>
-                        <div class="skeleton-line" style="width: 60%"></div>
-                        <div class="skeleton-line" style="width: 80%"></div>
-                        <div class="skeleton-line" style="width: 55%"></div>
+                    <div v-if="loadingPaneId === pane.id" class="pane-skeleton ml-10">
+                        <div v-for="i in skeletonWidths" class="skeleton-line" :style="{ width: `${i}%`}" />
                     </div>
                 </Transition>
             </div>
@@ -59,6 +54,7 @@ const emit = defineEmits<{
     (e: "close-pane", paneId: string): void;
 }>();
 
+const skeletonWidths = [10, 20, 33, 45, 72, 30, 60, 70, 55, 65, 20, 33, 10];
 const containerRef = ref<HTMLDivElement | null>(null);
 const dragging = ref(false);
 const dropZone = ref<"left" | "center" | "right" | null>(null);
