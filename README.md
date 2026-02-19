@@ -23,7 +23,7 @@ bun install/home/py/delivery/LoCode/.gitignore$0
 ## Development Server
 
 Start the development server on `http://localhost:3000`:
-/home/py/delivery/LoCode/README.md$0
+
 ```bash
 # npm
 npm run dev
