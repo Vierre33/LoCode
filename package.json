@@ -37,7 +37,10 @@
     "@nuxt/devtools": "^2.6.3",
     "baseline-browser-mapping": "^2.9.19",
     "electron": "^36.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^26.8.1"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   },
   "build": {
     "appId": "dev.locode.app",
@@ -52,18 +55,43 @@
       {
         "from": "node_modules/deno/",
         "to": "deno-bin/",
-        "filter": ["deno", "deno.exe"]
+        "filter": [
+          "deno",
+          "deno.exe"
+        ]
       }
     ],
     "mac": {
-      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
       "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "linux": {
-      "target": [{ "target": "AppImage", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
