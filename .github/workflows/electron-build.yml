@@ -13,16 +13,22 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: electron:build:win
+            platform: win
             artifact: dist/*.exe
           - os: macos-latest
-            script: electron:build:mac
+            platform: mac
             artifact: dist/*.dmg
           - os: ubuntu-latest
-            script: electron:build:linux
+            platform: linux
             artifact: dist/*.AppImage
 
     runs-on: ${{ matrix.os }}
+
+    # Point electron + electron-builder at workspace-relative dirs so the
+    # cache path is identical on all platforms (no OS-specific %APPDATA% etc.)
+    env:
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +37,7 @@ jobs:
         with:
           node-version: '22'
 
-      # Cache node_modules keyed on the lockfile — skips npm install entirely on hit
+      # --- node_modules cache (skips npm ci + native rebuild on hit) ---
       - uses: actions/cache@v4
         id: cache-deps
         with:
@@ -46,27 +52,37 @@ jobs:
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: npm ci
 
-      # On cache hit npm ci (and its postinstall: nuxt prepare) was skipped — run it manually
+      # On cache hit, npm ci (and postinstall: nuxt prepare) was skipped
       - name: Prepare Nuxt types
         if: steps.cache-deps.outputs.cache-hit == 'true'
         run: npx nuxt prepare
 
-      # Cache the Electron and electron-builder download caches (~100-200 MB per arch)
+      # --- Nuxt build cache (platform-independent — shared across all 3 OS runners) ---
+      # Key does NOT include runner.os: .output is pure JS and works on any platform.
+      # Whichever runner builds first, the other two restore from cache and skip nuxt build.
+      - uses: actions/cache@v4
+        id: cache-nuxt
+        with:
+          path: .output
+          key: nuxt-${{ hashFiles('app/**', 'server/**', 'nuxt.config.ts', 'package-lock.json') }}
+
+      - name: Build Nuxt
+        if: steps.cache-nuxt.outputs.cache-hit != 'true'
+        run: npx nuxt build
+
+      # --- Electron binary + electron-builder tools cache ---
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ${{ env.LOCALAPPDATA }}\electron\Cache
-            ${{ env.LOCALAPPDATA }}\electron-builder\Cache
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
           key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-electron-
 
-      - name: Build
-        run: npm run ${{ matrix.script }}
+      - name: Package with electron-builder
+        run: npx electron-builder --${{ matrix.platform }} --publish never
         env:
-          # electron-builder uses this to skip code signing in CI
           CSC_IDENTITY_AUTO_DISCOVERY: false
           # Mac notarization — set these in GitHub repo secrets if you need signed builds
           # APPLE_ID: ${{ secrets.APPLE_ID }}
