@@ -1,5 +1,5 @@
 name: Build Electron App
-run-name: Vuilding release ${{ github.ref_name }} ✘
+run-name: Building release ${{ github.ref_name }} ✘
 
 on:
   push:
@@ -23,8 +23,6 @@ jobs:
             artifact: dist/*.AppImage
 
     runs-on: ${{ matrix.os }}
-
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
