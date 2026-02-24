@@ -13,64 +13,59 @@ jobs:
       matrix:
         include:
           # - os: windows-latest
-          #   platform: win
+          #   script: electron:build:win
           #   artifact: dist/*.exe
           - os: macos-latest
-            platform: mac
+            script: electron:build:mac
             artifact: dist/*.dmg
           - os: ubuntu-latest
-            platform: linux
+            script: electron:build:linux
             artifact: dist/*.AppImage
 
     runs-on: ${{ matrix.os }}
 
-    # Point electron + electron-builder at workspace-relative dirs so the
-    # cache path is identical on all platforms (no OS-specific %APPDATA% etc.)
-    env:
-      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
-      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
-
     steps:
       - uses: actions/checkout@v4
 
-      # Caches ~/.npm tarballs — speeds up npm ci downloads without the
-      # overhead of restoring 1.6 GB of node_modules from cache
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+
+      # Cache node_modules keyed on the lockfile — skips npm install entirely on hit
+      - uses: actions/cache@v4
+        id: cache-deps
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
 
       - name: Install Python setuptools (node-gyp needs distutils, removed in Python 3.12)
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: pip3 install setuptools --break-system-packages
 
       - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: npm ci
 
-      # Nuxt build output is only ~17 MB and platform-independent.
-      # Key has no runner.os: whichever runner builds first, the other two restore and skip.
-      - uses: actions/cache@v4
-        id: cache-nuxt
-        with:
-          path: .output
-          key: nuxt-${{ hashFiles('app/**', 'server/**', 'nuxt.config.ts', 'package-lock.json') }}
+      # On cache hit npm ci (and its postinstall: nuxt prepare) was skipped — run it manually
+      - name: Prepare Nuxt types
+        if: steps.cache-deps.outputs.cache-hit == 'true'
+        run: npx nuxt prepare
 
-      - name: Build Nuxt
-        if: steps.cache-nuxt.outputs.cache-hit != 'true'
-        run: npx nuxt build
-
-      # Electron binary + electron-builder tools (~200 MB per platform)
+      # Cache the Electron and electron-builder download caches (~100-200 MB per arch)
       - uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/.cache/electron
-            ${{ github.workspace }}/.cache/electron-builder
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ${{ env.LOCALAPPDATA }}\electron\Cache
+            ${{ env.LOCALAPPDATA }}\electron-builder\Cache
           key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-electron-
-
-      - name: Package with electron-builder
-        run: npx electron-builder --${{ matrix.platform }} --publish never
+      - name: Build
+        run: npm run ${{ matrix.script }}
         env:
+          # electron-builder uses this to skip code signing in CI
           CSC_IDENTITY_AUTO_DISCOVERY: false
           # Mac notarization — set these in GitHub repo secrets if you need signed builds
           # APPLE_ID: ${{ secrets.APPLE_ID }}
