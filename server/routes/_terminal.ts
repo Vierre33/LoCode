@@ -1,5 +1,6 @@
 import { defineWebSocketHandler } from "h3";
 import * as pty from "node-pty";
+import { existsSync } from "node:fs";
 
 const ptys = new Map<string, pty.IPty>();
 
@@ -24,8 +25,7 @@ export default defineWebSocketHandler({
             let cwd = typeof data.cwd === "string" && data.cwd ? data.cwd : home;
 
             // Fallback to home or / if cwd doesn't exist
-            const fs = await import("node:fs");
-            if (!fs.existsSync(cwd)) cwd = fs.existsSync(home) ? home : "/";
+            if (!existsSync(cwd)) cwd = existsSync(home) ? home : "/";
 
             const shell = process.env.SHELL
                 || (process.platform === "darwin" ? "/bin/zsh" : process.platform === "win32" ? "powershell.exe" : "/bin/bash");
