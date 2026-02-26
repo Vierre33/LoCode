@@ -21,7 +21,8 @@ export default defineWebSocketHandler({
             if (ptys.has(peer.id)) return;
 
             const cwd = typeof data.cwd === "string" && data.cwd ? data.cwd : process.env.HOME || "/home";
-            const shell = process.env.SHELL || "bash";
+            const shell = process.env.SHELL
+                || (process.platform === "darwin" ? "/bin/zsh" : process.platform === "win32" ? "powershell.exe" : "/bin/bash");
 
             let term: pty.IPty;
             try {

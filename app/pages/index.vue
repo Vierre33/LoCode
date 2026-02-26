@@ -547,20 +547,6 @@ onMounted(async () => {
         .forEach(k => localStorage.removeItem(k));
     ["locode:sidebarWidth", "locode:splitRatio", "locode:terminalHeight", "locode:currentFile"].forEach(k => localStorage.removeItem(k));
 
-    if (!rootPath.value) {
-        // Auto-detect home directory on first visit
-        try {
-            const res = await apiFetch("/info");
-            if (res.ok) {
-                const info = await res.json();
-                if (info.home) {
-                    rootPath.value = info.home;
-                    localStorage.setItem("locode:rootPath", info.home);
-                }
-            }
-        } catch {}
-    }
-
     if (rootPath.value) {
         const config = await loadConfig(rootPath.value);
         sidebarWidth.value = config.sidebarWidth;

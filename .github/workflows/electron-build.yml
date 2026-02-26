@@ -83,6 +83,7 @@ jobs:
       # Remove native modules from Nuxt output so Nitro uses the root copies
       # (which electron-builder rebuilds for the correct Electron ABI)
       - name: Fix native modules for Electron
+        shell: bash
         run: rm -rf .output/server/node_modules/node-pty .output/server/node_modules/ssh2
 
       # Trim node-pty prebuilds to current platform only (saves ~50MB)
