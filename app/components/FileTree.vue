@@ -68,7 +68,10 @@ function onLeave() {
     font-size: 0.85rem;
     transition: font-weight .1s ease;
     white-space: nowrap;
+    overflow: hidden;
     color: rgba(255, 255, 255, 0.9);
+    flex: 1;
+    min-width: 0;
 }
 
 .node:hover {

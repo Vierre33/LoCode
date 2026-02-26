@@ -3,7 +3,7 @@
         <button class="browse-btn" @click="toggleBrowse">
             {{ browsing ? 'Select Folder' : 'Open Folder' }}
         </button>
-        <div class="overflow-y-auto flex-1 p-1">
+        <div class="overflow-y-auto overflow-x-hidden flex-1 p-1">
             <div v-if="treeLoading" class="tree-skeleton">
                 <div v-for="(node, i) in skeletonBlueprint" :key="i" class="skeleton-row"
                     :style="{ paddingLeft: node.depth * 20 + 'px' }">
@@ -264,10 +264,22 @@ async function loadBrowseTree() {
         if (!homeNode) return;
         homeNode.open = true;
         homeNode.children = await loadTree("/home", true);
-        // Detect user dir from rootPath, or fallback to first dir in /home
+        // Detect user dir from rootPath, API info, or fallback to first dir in /home
+        let userPath: string | undefined;
         const userMatch = props.rootPath?.match(/^\/home\/([^/]+)/);
-        const userDir = userMatch
-            ? homeNode.children.find((n: any) => n.path === `/home/${userMatch[1]}`)
+        if (userMatch) {
+            userPath = `/home/${userMatch[1]}`;
+        } else {
+            try {
+                const res = await apiFetch("/info");
+                if (res.ok) {
+                    const info = await res.json();
+                    if (info.home) userPath = info.home;
+                }
+            } catch {}
+        }
+        const userDir = userPath
+            ? homeNode.children.find((n: any) => n.path === userPath)
             : homeNode.children[0];
         if (userDir) {
             userDir.open = true;
