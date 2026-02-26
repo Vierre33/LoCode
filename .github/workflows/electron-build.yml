@@ -58,7 +58,7 @@ jobs:
         run: npm ci
 
       - uses: actions/cache/save@v4
-        if: "!startsWith(github.ref, 'refs/tags/')"
+        if: "!startsWith(github.ref, 'refs/tags/') && steps.cache-deps.outputs.cache-hit != 'true'"
         with:
           path: |
             ~/.npm
@@ -78,7 +78,7 @@ jobs:
         run: npx nuxt build
 
       - uses: actions/cache/save@v4
-        if: "!startsWith(github.ref, 'refs/tags/')"
+        if: "!startsWith(github.ref, 'refs/tags/') && steps.cache-nuxt.outputs.cache-hit != 'true'"
         with:
           path: .output
           key: nuxt-${{ hashFiles('app/**', 'server/**', 'nuxt.config.ts', 'package-lock.json') }}
