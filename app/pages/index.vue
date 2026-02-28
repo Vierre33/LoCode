@@ -1,12 +1,5 @@
 <template>
     <div class="flex h-screen gap-2 p-2 relative">
-        <!-- Progress bar -->
-        <Transition name="progress-fade">
-            <div v-if="loadingPaneId" class="progress-bar">
-                <div class="progress-fill"></div>
-            </div>
-        </Transition>
-
         <!-- Mobile hamburger toggle -->
         <button @click="sidebarOpen = !sidebarOpen" class="hamburger md:hidden">
             {{ sidebarOpen ? '✕' : '☰' }}
@@ -19,9 +12,9 @@
         <div class="sidebar" :class="{ open: sidebarOpen, 'no-transition': isResizing }" :style="sidebarStyle">
             <FileExplorer
                 @select-file="onSelectFile" @select-root="onSelectRoot"
-                @update:openFolders="onUpdateOpenFolders" @update:skeleton="onUpdateSkeleton"
+                @update:openFolders="onUpdateOpenFolders"
                 :openFiles="panes.map(p => p.filePath).filter(Boolean)" :rootPath="rootPath"
-                :initialOpenFolders="cfgOpenFolders" :initialSkeleton="cfgSkeleton" />
+                :initialOpenFolders="cfgOpenFolders" />
             <div v-if="!isMobile" class="resize-handle" @mousedown.prevent="startResize" />
         </div>
 
@@ -338,49 +331,12 @@
     transition: border-color 0.3s ease, box-shadow 0.6s ease !important;
 }
 
-/* --- Progress bar --- */
-.progress-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    z-index: 200;
-    overflow: hidden;
-}
-
-.progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, rgba(100, 180, 255, 0.8), rgba(100, 220, 180, 0.8));
-    border-radius: 0 2px 2px 0;
-    animation: progress-crawl 2.5s cubic-bezier(0.1, 0.05, 0.6, 1) forwards;
-}
-
-@keyframes progress-crawl {
-    0%   { width: 0%; }
-    30%  { width: 60%; }
-    70%  { width: 78%; }
-    100% { width: 85%; }
-}
-
-.progress-fade-leave-active .progress-fill {
-    width: 100% !important;
-    transition: width 0.1s ease;
-}
-
-.progress-fade-leave-active {
-    transition: opacity 0.3s ease 0.1s;
-}
-
-.progress-fade-leave-to {
-    opacity: 0;
-}
 </style>
 
 <script setup lang="ts">
 import type { EditorPane } from '~/components/EditorArea.vue';
 import { useLocodeConfig } from '~/composables/useLocodeConfig';
-import type { LocodeConfig, SkeletonNode } from '~/composables/useLocodeConfig';
+import type { LocodeConfig } from '~/composables/useLocodeConfig';
 
 const { loadConfig, saveConfig } = useLocodeConfig();
 const { apiFetch, getMode } = useApi();
@@ -390,7 +346,6 @@ const isRemote = import.meta.client ? ref(getMode() !== "local") : ref(false);
 
 // --- Config state (loaded from .LoCode) ---
 const cfgOpenFolders = ref<string[]>([]);
-const cfgSkeleton = ref<SkeletonNode[]>([]);
 const cfgSplitRatio = ref(50);
 const cfgTerminalHeight = ref(261);
 
@@ -437,11 +392,6 @@ watch(terminalSavedPairs, () => saveWorkspaceConfig());
 function onUpdateOpenFolders(folders: string[]) {
     cfgOpenFolders.value = folders;
     saveConfig(rootPath.value, { openFolders: folders });
-}
-
-function onUpdateSkeleton(skeleton: SkeletonNode[]) {
-    cfgSkeleton.value = skeleton;
-    saveConfig(rootPath.value, { skeleton });
 }
 
 function onUpdateSplitRatio(ratio: number) {
@@ -551,14 +501,15 @@ onMounted(async () => {
         const config = await loadConfig(rootPath.value);
         sidebarWidth.value = config.sidebarWidth;
         cfgOpenFolders.value = config.openFolders;
-        cfgSkeleton.value = config.skeleton;
         cfgSplitRatio.value = config.splitRatio;
         cfgTerminalHeight.value = config.terminalHeight;
         await restoreWorkspace(rootPath.value, config);
     }
+    startReloadPolling();
 });
 
 onBeforeUnmount(() => {
+    if (reloadInterval) { clearInterval(reloadInterval); reloadInterval = null; }
     mq?.removeEventListener("change", onMediaChange);
     resizeCleanup?.();
     window.removeEventListener("keydown", onKeyDown);
@@ -656,7 +607,6 @@ async function onSelectRoot(path: string) {
     const config = await loadConfig(path);
     sidebarWidth.value = config.sidebarWidth;
     cfgOpenFolders.value = config.openFolders;
-    cfgSkeleton.value = config.skeleton;
     cfgSplitRatio.value = config.splitRatio;
     cfgTerminalHeight.value = config.terminalHeight;
     rootPath.value = path;
@@ -750,15 +700,20 @@ function onClosePane(paneId: string) {
 }
 
 function doClosePane(paneId: string) {
+    lastMtime.delete(paneId);
     if (panes.value.length > 1) {
         const remaining = panes.value.find(p => p.id !== paneId)!;
+        const oldMt = lastMtime.get(remaining.id);
+        lastMtime.delete(remaining.id);
         remaining.id = "main";
+        if (oldMt) lastMtime.set("main", oldMt);
         panes.value = [remaining];
         activePaneId.value = "main";
     } else {
         // Last pane: clear it
         const pane = panes.value[0]!;
         userEdited.delete(pane.id);
+        lastMtime.delete(pane.id);
         pane.filePath = "";
         pane.code = "";
         pane.savedCode = "";
@@ -793,6 +748,47 @@ function executePendingAction() {
     }
 }
 
+// --- File auto-reload (mtime polling) ---
+const lastMtime = new Map<string, number>();
+
+async function fetchMtime(path: string): Promise<number | null> {
+    try {
+        const res = await apiFetch("/stat?path=" + encodeURIComponent(path));
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.mtime ?? null;
+    } catch { return null; }
+}
+
+let reloadInterval: ReturnType<typeof setInterval> | null = null;
+
+function startReloadPolling() {
+    if (reloadInterval) return;
+    reloadInterval = setInterval(async () => {
+        for (const pane of panes.value) {
+            if (!pane.filePath) continue;
+            const mtime = await fetchMtime(pane.filePath);
+            if (mtime === null) continue;
+            const prev = lastMtime.get(pane.id);
+            if (prev && mtime > prev && pane.code === pane.savedCode) {
+                // File changed on disk and no unsaved edits — reload
+                try {
+                    const res = await apiFetch("/read?path=" + pane.filePath);
+                    if (res.ok) {
+                        const text = await res.text();
+                        userEdited.delete(pane.id);
+                        pane.code = text;
+                        pane.savedCode = text;
+                        lastMtime.set(pane.id, mtime);
+                    }
+                } catch {}
+            } else if (!prev || mtime > prev) {
+                lastMtime.set(pane.id, mtime);
+            }
+        }
+    }, 2000);
+}
+
 // --- File I/O ---
 async function loadFileIntoPane(paneId: string, path: string) {
     const pane = panes.value.find(p => p.id === paneId);
@@ -822,6 +818,7 @@ async function loadFileIntoPane(paneId: string, path: string) {
     } finally {
         loadingPaneId.value = null;
     }
+    fetchMtime(path).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
     saveWorkspaceConfig();
 }
 
@@ -841,6 +838,7 @@ async function savePaneFile(paneId: string) {
             console.error("Save failed:", await res.text());
         } else {
             pane.savedCode = pane.code;
+            fetchMtime(pane.filePath).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
         }
     } catch {
         console.error("Network error: unable to save file");
