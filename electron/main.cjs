@@ -1,9 +1,10 @@
 "use strict";
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const net = require("net");
 const fs = require("fs");
+const os = require("os");
 
 // Prevent multiple instances — second launch focuses the existing window instead
 if (!app.requestSingleInstanceLock()) {
@@ -96,6 +97,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            preload: path.join(__dirname, "preload.cjs"),
         },
     });
 
@@ -156,6 +158,72 @@ function getFreePort() {
     });
 }
 
+// ── Terminal PTY (runs in main process — avoids ELECTRON_RUN_AS_NODE issues) ──
+const terminals = new Map();
+
+function getShell() {
+    return process.env.SHELL
+        || (process.platform === "darwin" ? "/bin/zsh"
+            : process.platform === "win32" ? "powershell.exe" : "/bin/bash");
+}
+
+ipcMain.handle("term:create", (_event, { id, cols, rows, cwd }) => {
+    try {
+        // Lazy-load node-pty in the main process
+        const pty = require("node-pty");
+        const home = os.homedir();
+        const termCwd = cwd || home;
+        const termShell = getShell();
+
+        log(`[pty] spawn id=${id} shell=${termShell} cwd=${termCwd}`);
+        const term = pty.spawn(termShell, [], {
+            name: "xterm-256color",
+            cols: cols || 80,
+            rows: rows || 24,
+            cwd: fs.existsSync(termCwd) ? termCwd : home,
+            env: {
+                ...process.env,
+                TERM: "xterm-256color",
+                COLORTERM: "truecolor",
+                HOME: home,
+            },
+        });
+
+        terminals.set(id, term);
+
+        term.onData((data) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send("term:data", { id, data });
+            }
+        });
+
+        term.onExit(({ exitCode }) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send("term:exit", { id, code: exitCode });
+            }
+            terminals.delete(id);
+        });
+
+        return { ok: true };
+    } catch (err) {
+        log(`[pty] error: ${err.message}`);
+        return { ok: false, error: err.message };
+    }
+});
+
+ipcMain.on("term:input", (_event, { id, data }) => {
+    terminals.get(id)?.write(data);
+});
+
+ipcMain.on("term:resize", (_event, { id, cols, rows }) => {
+    try { terminals.get(id)?.resize(cols, rows); } catch {}
+});
+
+ipcMain.on("term:kill", (_event, { id }) => {
+    try { terminals.get(id)?.kill(); } catch {}
+    terminals.delete(id);
+});
+
 app.whenReady().then(async () => {
     nuxtPort = await getFreePort();
     log(`[main] Assigned port: nuxt=${nuxtPort}`);
@@ -179,6 +247,10 @@ app.whenReady().then(async () => {
 });
 
 app.on("will-quit", () => {
+    for (const term of terminals.values()) {
+        try { term.kill(); } catch {}
+    }
+    terminals.clear();
     try { nuxtProc?.kill(); } catch {}
 });
 
