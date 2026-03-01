@@ -187,20 +187,24 @@
     box-shadow: 0px 0px 25px rgba(227, 228, 237, 0.37);
     border: 2px solid rgba(255, 255, 255, 0.12);
     border-radius: 5px;
-    transition: .3s ease;
+    transform: translateZ(0);
+    transition: transform .18s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color .15s ease, box-shadow .25s ease, border-color .15s ease;
     color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
 }
 
-.btn:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.37);
+.btn:hover:not(:disabled) {
+    transform: translateZ(0) translateY(-2px);
+    border-color: rgba(180, 210, 255, 0.45);
+    box-shadow: 0 0 18px rgba(140, 190, 255, 0.35), 0 0 6px rgba(180, 210, 255, 0.2);
 }
 
 .btn:disabled {
     opacity: 0.4;
-    cursor: default;
+    cursor: not-allowed;
     transform: none;
+    pointer-events: auto;
 }
 
 .btn-press {

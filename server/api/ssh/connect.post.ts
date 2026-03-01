@@ -20,6 +20,11 @@ export default defineEventHandler(async (event) => {
         });
         return { ok: true, home: result.home };
     } catch (err: any) {
-        throw createError({ statusCode: 502, statusMessage: err.message });
+        // Clean up error message — strip internal details (IPs, ports, paths)
+        let msg = (err.message || "Connection failed")
+            .replace(/^SSH connection failed:\s*/, "")
+            .replace(/\d+\.\d+\.\d+\.\d+:\d+/g, "host")
+            .replace(/address\s+\S+/gi, "host");
+        throw createError({ statusCode: 502, statusMessage: msg });
     }
 });
