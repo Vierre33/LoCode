@@ -14,6 +14,23 @@ if (!app.requestSingleInstanceLock()) {
 
 const isPacked = app.isPackaged;
 
+// ── CLI argument: `locode /path/to/dir` opens with that directory ────
+function parseDirArg(argv) {
+    // In dev: ['electron', '.', '/path'] → skip 2; packed: ['/app', '/path'] → skip 1
+    const skip = isPacked ? 1 : 2;
+    for (let i = skip; i < argv.length; i++) {
+        const arg = argv[i];
+        if (arg.startsWith("-")) continue; // skip flags
+        const resolved = path.resolve(arg);
+        try {
+            if (fs.statSync(resolved).isDirectory()) return resolved;
+        } catch {}
+    }
+    return null;
+}
+
+const cliRoot = parseDirArg(process.argv);
+
 // In dev:    __dirname = <project>/electron → root = <project>
 // In packed: __dirname = <app>/Resources/app.asar/electron → root = app.asar
 const root = path.join(__dirname, "..");
@@ -145,8 +162,8 @@ function createWindow(rootPath) {
     win.webContents.on("did-finish-load", () => {
         log("[window] did-finish-load");
     });
-    win.webContents.on("console-message", (e, level, msg, line, sourceId) => {
-        log(`[window:console] [${level}] ${msg}`);
+    win.webContents.on("console-message", (e) => {
+        log(`[window:console] [${e.level}] ${e.message}`);
     });
 
     const url = rootPath
@@ -185,9 +202,24 @@ function showError(message) {
     win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
 }
 
-// Second launch: create a new window in the existing process
-app.on("second-instance", () => {
-    createWindow();
+// Second launch: create a new window with the dir arg, or focus existing window
+app.on("second-instance", (_event, argv) => {
+    const dirArg = parseDirArg(argv);
+    if (dirArg) {
+        // Open a new window with the requested directory
+        const win = createWindow(dirArg);
+        win.once("ready-to-show", () => win.focus());
+    } else {
+        // No dir arg — just focus the most recent window
+        const wins = BrowserWindow.getAllWindows();
+        if (wins.length > 0) {
+            const w = wins[0];
+            if (w.isMinimized()) w.restore();
+            w.focus();
+        } else {
+            createWindow();
+        }
+    }
 });
 
 // ── Session root tracking (renderer notifies main when rootPath changes) ──
@@ -300,7 +332,107 @@ ipcMain.on("term:kill", (_event, { id }) => {
     terminalOwner.delete(id);
 });
 
+// ── CLI command installer ────────────────────────────────────────────
+// Installs the `locode` shell command so users can run `locode .` from terminal.
+// macOS: uses osascript for admin privileges (prompts password once)
+// Windows: creates locode.cmd and adds to user PATH via registry
+
+function getExpectedMacScript() {
+    // Use the Electron binary directly so second-instance receives argv
+    return [
+        '#!/bin/sh',
+        '# LoCode CLI — opens a project in LoCode',
+        'DIR=""',
+        'if [ -n "$1" ] && [ -d "$1" ]; then',
+        '    DIR="$(cd "$1" && pwd)"',
+        'fi',
+        'if [ -n "$DIR" ]; then',
+        `    "${process.execPath}" "$DIR" &`,
+        'else',
+        `    "${process.execPath}" &`,
+        'fi',
+    ].join("\n") + "\n";
+}
+
+const cliDeclinedFile = path.join(app.getPath("userData"), ".cli-declined");
+
+function installCLI() {
+    if (!isPacked) return;
+
+    const platform = process.platform;
+
+    if (platform === "darwin") {
+        const target = "/usr/local/bin/locode";
+        const script = getExpectedMacScript();
+
+        // Check if already installed with correct content — skip if up to date
+        const alreadyInstalled = fs.existsSync(target);
+        try {
+            if (alreadyInstalled && fs.readFileSync(target, "utf-8") === script) {
+                return;
+            }
+        } catch {}
+
+        // Already installed but outdated → silently update (user already agreed before)
+        if (alreadyInstalled) {
+            // fall through to install — no prompt needed
+        } else {
+            // Never installed — respect previous decline
+            if (fs.existsSync(cliDeclinedFile)) return;
+        }
+
+        try {
+            // Write script to a temp file, then sudo-copy it (avoids shell escaping)
+            const tmpFile = path.join(app.getPath("temp"), "locode-cli-install.sh");
+            fs.writeFileSync(tmpFile, script, { mode: 0o755 });
+
+            const copyCmd = `do shell script "mkdir -p /usr/local/bin && cp '${tmpFile}' ${target} && chmod 755 ${target}" with administrator privileges`;
+
+            if (alreadyInstalled) {
+                // Silent update — user already agreed, just need admin password
+                require("child_process").execFileSync("osascript", ["-e", copyCmd], { stdio: "ignore" });
+            } else {
+                // First install — explain what will happen, then ask for admin privileges
+                const osa = [
+                    'osascript',
+                    '-e', `display dialog "LoCode wants to install the locode command in ${target} so you can open projects from the terminal (e.g. locode .)" buttons {"Cancel", "Install"} default button "Install" with title "LoCode CLI" with icon caution`,
+                    '-e', copyCmd,
+                ];
+                require("child_process").execFileSync(osa[0], osa.slice(1), { stdio: "ignore" });
+            }
+            try { fs.unlinkSync(tmpFile); } catch {}
+            log("[cli] installed /usr/local/bin/locode");
+        } catch (err) {
+            if (!alreadyInstalled) {
+                // User cancelled first install — remember so we don't ask again
+                try { fs.writeFileSync(cliDeclinedFile, new Date().toISOString()); } catch {}
+            }
+            log(`[cli] macOS install ${alreadyInstalled ? "update" : "declined or"} failed: ${err.message}`);
+        }
+    } else if (platform === "win32") {
+        const appDir = path.dirname(process.execPath);
+        const cmdFile = path.join(appDir, "locode.cmd");
+        const exePath = process.execPath;
+        const script = `@echo off\r\nsetlocal\r\nset "DIR="\r\nif not "%~1"=="" if exist "%~1\\*" set "DIR=%~f1"\r\nif defined DIR (\r\n    start "" "${exePath}" "%DIR%"\r\n) else (\r\n    start "" "${exePath}" %*\r\n)\r\n`;
+        try {
+            if (!fs.existsSync(cmdFile) || fs.readFileSync(cmdFile, "utf-8") !== script) {
+                fs.writeFileSync(cmdFile, script);
+                log(`[cli] installed ${cmdFile}`);
+            }
+            const currentPath = execSync('reg query "HKCU\\Environment" /v Path', { encoding: "utf-8" }).split("REG_EXPAND_SZ")[1]?.trim() || "";
+            if (!currentPath.includes(appDir)) {
+                execSync(`reg add "HKCU\\Environment" /v Path /t REG_EXPAND_SZ /d "${currentPath};${appDir}" /f`, { stdio: "ignore" });
+                log(`[cli] added ${appDir} to user PATH`);
+            }
+        } catch (err) {
+            log(`[cli] Windows CLI install failed: ${err.message}`);
+        }
+    }
+    // Linux: no auto-install (AppImage is portable)
+}
+
 app.whenReady().then(async () => {
+    installCLI();
     // ── Application menu (enables "New Window" in dock right-click on macOS) ──
     const isMac = process.platform === "darwin";
     const template = [
@@ -349,15 +481,21 @@ app.whenReady().then(async () => {
         await waitForPort(nuxtPort);
         log("[main] Nuxt server is ready, creating window(s)");
 
-        // Restore previous sessions or create a single default window
-        const savedSessions = loadSessions();
-        if (savedSessions.length > 0) {
-            log(`[session] restoring ${savedSessions.length} session(s)`);
-            for (const rootVal of savedSessions) {
-                createWindow(rootVal || undefined);
-            }
+        // CLI argument takes priority over session restore
+        if (cliRoot) {
+            log(`[main] Opening directory from CLI arg: ${cliRoot}`);
+            createWindow(cliRoot);
         } else {
-            createWindow();
+            // Restore previous sessions or create a single default window
+            const savedSessions = loadSessions();
+            if (savedSessions.length > 0) {
+                log(`[session] restoring ${savedSessions.length} session(s)`);
+                for (const rootVal of savedSessions) {
+                    createWindow(rootVal || undefined);
+                }
+            } else {
+                createWindow();
+            }
         }
     } catch (err) {
         log(`[main] Nuxt server did not start: ${err.message}`);
