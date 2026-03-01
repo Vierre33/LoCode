@@ -391,18 +391,16 @@ async function disconnect() {
 }
 
 /* Transition */
-.modal-enter-active .dialog { animation: modal-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-enter-active .dialog { animation: modal-in 0.3s ease-out; }
 @keyframes modal-in {
-    0%   { opacity: 0; transform: scale(0.88) translateY(12px); }
-    60%  { opacity: 1; transform: scale(1.03) translateY(-2px); }
-    80%  { transform: scale(0.98) translateY(1px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); }
+    0%   { opacity: 0; transform: translateZ(0) translateY(16px); }
+    100% { opacity: 1; transform: translateZ(0) translateY(0); }
 }
 .modal-leave-active { transition: opacity 0.18s ease; }
 .modal-leave-active .dialog { animation: modal-out 0.18s ease-in forwards; }
 @keyframes modal-out {
-    0%   { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(0.92) translateY(6px); }
+    0%   { opacity: 1; transform: translateZ(0); }
+    100% { opacity: 0; transform: translateZ(0) translateY(6px); }
 }
 .modal-leave-to { opacity: 0; }
 </style>
