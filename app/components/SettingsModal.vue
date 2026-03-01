@@ -201,9 +201,7 @@ async function disconnect() {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(0, 0, 0, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -387,17 +385,12 @@ async function disconnect() {
     transform: translateY(-2px);
 }
 
-/* Transition */
-.modal-enter-active .dialog { animation: modal-in 0.3s ease-out; }
+/* Transition — no opacity animation to avoid Electron compositing bugs with box-shadow */
+.modal-enter-active .dialog { animation: modal-in 0.25s ease-out; }
 @keyframes modal-in {
-    0%   { opacity: 0; transform: translateZ(0) translateY(16px); }
-    100% { opacity: 1; transform: translateZ(0) translateY(0); }
+    from { transform: translateY(12px); }
+    to   { transform: translateY(0); }
 }
-.modal-leave-active { transition: opacity 0.18s ease; }
-.modal-leave-active .dialog { animation: modal-out 0.18s ease-in forwards; }
-@keyframes modal-out {
-    0%   { opacity: 1; transform: translateZ(0); }
-    100% { opacity: 0; transform: translateZ(0) translateY(6px); }
-}
+.modal-leave-active { transition: opacity 0.15s ease; }
 .modal-leave-to { opacity: 0; }
 </style>
