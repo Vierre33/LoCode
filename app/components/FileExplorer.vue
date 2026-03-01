@@ -297,4 +297,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
     window.removeEventListener("keydown", onEscape);
 });
+
+defineExpose({
+    showBrowse() {
+        browsing.value = true;
+        loadBrowseTree();
+    },
+});
 </script>
