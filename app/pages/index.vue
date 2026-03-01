@@ -17,7 +17,7 @@
 
         <!-- Sidebar -->
         <div class="sidebar" :class="{ open: sidebarOpen, 'no-transition': isResizing }" :style="sidebarStyle">
-            <FileExplorer
+            <FileExplorer ref="fileExplorerRef"
                 @select-file="onSelectFile" @select-root="onSelectRoot"
                 @update:openFolders="onUpdateOpenFolders"
                 :openFiles="panes.map(p => p.filePath).filter(Boolean)" :rootPath="rootPath"
@@ -476,9 +476,11 @@ function closeTerminal() {
 }
 
 // --- SSH connect/disconnect ---
-function onSSHConnected() {
-    // New remote device — clear current workspace and show folder selector
+const fileExplorerRef = ref<{ showBrowse: () => void } | null>(null);
+
+function resetToFolderSelector() {
     saveWorkspaceConfig();
+    const wasEmpty = rootPath.value === "";
     rootPath.value = "";
     localStorage.removeItem("locode:rootPath");
     electronSession?.setRoot("");
@@ -486,18 +488,18 @@ function onSSHConnected() {
     activePaneId.value = "main";
     lastMtime.clear();
     if (terminalOpen.value) closeTerminal();
+    // If rootPath was already empty, the watcher won't fire — trigger browse manually
+    if (wasEmpty) {
+        fileExplorerRef.value?.showBrowse();
+    }
+}
+
+function onSSHConnected() {
+    resetToFolderSelector();
 }
 
 function onSSHDisconnected() {
-    // Back to local — clear workspace and show folder selector
-    saveWorkspaceConfig();
-    rootPath.value = "";
-    localStorage.removeItem("locode:rootPath");
-    electronSession?.setRoot("");
-    panes.value = [{ id: "main", filePath: "", code: "", savedCode: "", language: "" }];
-    activePaneId.value = "main";
-    lastMtime.clear();
-    if (terminalOpen.value) closeTerminal();
+    resetToFolderSelector();
 }
 
 const editorAreaRef = ref<{ splitRatio: number; focusPane: (id: string) => void } | null>(null);
@@ -600,6 +602,9 @@ onBeforeUnmount(() => {
 });
 
 function onKeyDown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+        e.preventDefault();
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         if (!activePane.value?.filePath) return;

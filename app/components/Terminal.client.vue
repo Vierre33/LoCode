@@ -177,9 +177,9 @@ onMounted(async () => {
         });
     }
 
-    // Let Ctrl+J and Ctrl+S bubble up to the window handler
+    // Let Ctrl+J, Ctrl+S, Ctrl+R bubble up to the window handler
     term.attachCustomKeyEventHandler((event) => {
-        if ((event.ctrlKey || event.metaKey) && (event.key === "j" || event.key === "s")) {
+        if ((event.ctrlKey || event.metaKey) && (event.key === "j" || event.key === "s" || event.key === "r")) {
             return false;
         }
         return true;
