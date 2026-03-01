@@ -187,14 +187,17 @@
     box-shadow: 0px 0px 25px rgba(227, 228, 237, 0.37);
     border: 2px solid rgba(255, 255, 255, 0.12);
     border-radius: 5px;
-    transition: .3s ease;
+    transform: translateZ(0);
+    transition: transform .18s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color .15s ease, box-shadow .25s ease, border-color .15s ease;
     color: rgba(255, 255, 255, 0.9);
     white-space: nowrap;
 }
 
 .btn:hover {
-    transform: translateY(-2px);
+    transform: translateZ(0) translateY(-2px);
     border-color: rgba(255, 255, 255, 0.37);
+    box-shadow: 0 0 14px rgba(180, 210, 255, 0.3);
 }
 
 .btn:disabled {

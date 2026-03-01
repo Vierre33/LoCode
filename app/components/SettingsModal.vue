@@ -154,7 +154,16 @@ async function connect() {
         });
 
         if (!res.ok) {
-            const text = await res.text();
+            let text = "";
+            try {
+                const body = await res.json();
+                // Extract just the human-readable message from JSON error responses
+                text = body.message || body.error || body.statusMessage || "";
+            } catch {
+                text = await res.text().catch(() => "");
+            }
+            // Strip technical details (URLs, ports, stack traces)
+            text = text.replace(/https?:\/\/\S+/g, "").replace(/\d+\.\d+\.\d+\.\d+:\d+/g, "").trim();
             error.value = text || "Connection failed";
             return;
         }
