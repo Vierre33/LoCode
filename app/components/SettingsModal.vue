@@ -359,6 +359,8 @@ async function disconnect() {
     cursor: pointer;
     color: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.15);
+    transform: translateZ(0);
+    box-shadow: 0 0 0 transparent;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
         background 0.15s ease, box-shadow 0.25s ease, border-color 0.15s ease;
 }
@@ -366,7 +368,7 @@ async function disconnect() {
     opacity: 0.4;
     cursor: not-allowed;
 }
-.dialog-btn:active:not(:disabled) { transform: scale(0.93); transition: transform 0.08s ease; }
+.dialog-btn:active:not(:disabled) { transform: translateZ(0) scale(0.93); transition: transform 0.08s ease; }
 
 .dialog-btn.connect {
     background: rgba(110, 231, 183, 0.2);
@@ -375,7 +377,7 @@ async function disconnect() {
 .dialog-btn.connect:hover:not(:disabled) {
     background: rgba(110, 231, 183, 0.3);
     box-shadow: 0 0 12px rgba(110, 231, 183, 0.2);
-    transform: translateY(-2px);
+    transform: translateZ(0) translateY(-2px);
 }
 
 .dialog-btn.disconnect {
@@ -385,7 +387,7 @@ async function disconnect() {
 .dialog-btn.disconnect:hover {
     background: rgba(252, 165, 165, 0.3);
     box-shadow: 0 0 12px rgba(252, 165, 165, 0.2);
-    transform: translateY(-2px);
+    transform: translateZ(0) translateY(-2px);
 }
 
 /* Transition */
