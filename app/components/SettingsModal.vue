@@ -201,7 +201,9 @@ async function disconnect() {
     position: fixed;
     inset: 0;
     z-index: 100;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,7 +211,9 @@ async function disconnect() {
 
 .dialog {
     position: relative;
-    background-color: rgb(30, 30, 30);
+    background-color: rgba(30, 30, 30, 0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1.5px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     padding: 24px;
@@ -356,7 +360,7 @@ async function disconnect() {
     color: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.15);
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-        background 0.15s ease, border-color 0.15s ease;
+        background 0.15s ease, box-shadow 0.25s ease, border-color 0.15s ease;
 }
 .dialog-btn:disabled {
     opacity: 0.4;
@@ -369,8 +373,8 @@ async function disconnect() {
     border-color: rgba(110, 231, 183, 0.4);
 }
 .dialog-btn.connect:hover:not(:disabled) {
-    background: rgba(110, 231, 183, 0.35);
-    border-color: rgba(110, 231, 183, 0.7);
+    background: rgba(110, 231, 183, 0.3);
+    box-shadow: 0 0 12px rgba(110, 231, 183, 0.2);
     transform: translateY(-2px);
 }
 
@@ -379,17 +383,26 @@ async function disconnect() {
     border-color: rgba(252, 165, 165, 0.4);
 }
 .dialog-btn.disconnect:hover {
-    background: rgba(252, 165, 165, 0.35);
-    border-color: rgba(252, 165, 165, 0.7);
+    background: rgba(252, 165, 165, 0.3);
+    box-shadow: 0 0 12px rgba(252, 165, 165, 0.2);
     transform: translateY(-2px);
 }
 
-/* Transition — no opacity animation to avoid Electron compositing bugs with box-shadow */
-.modal-enter-active .dialog { animation: modal-in 0.25s ease-out; }
+/* Transition */
+.modal-enter-active { animation: backdrop-fade-in 0.25s ease forwards; }
+@keyframes backdrop-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.modal-enter-active .dialog { animation: modal-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 @keyframes modal-in {
-    from { transform: translateY(12px); }
-    to   { transform: translateY(0); }
+    0%   { opacity: 0; transform: scale(0.88) translateY(12px); }
+    60%  { opacity: 1; transform: scale(1.03) translateY(-2px); }
+    80%  { transform: scale(0.98) translateY(1px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
 }
-.modal-leave-active { transition: opacity 0.15s ease; }
+.modal-leave-active { transition: opacity 0.18s ease; }
+.modal-leave-active .dialog { animation: modal-out 0.18s ease-in forwards; }
+@keyframes modal-out {
+    0%   { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.92) translateY(6px); }
+}
 .modal-leave-to { opacity: 0; }
 </style>
