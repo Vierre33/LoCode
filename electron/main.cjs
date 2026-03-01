@@ -366,33 +366,48 @@ function installCLI() {
         const script = getExpectedMacScript();
 
         // Check if already installed with correct content — skip if up to date
+        const alreadyInstalled = fs.existsSync(target);
         try {
-            if (fs.existsSync(target) && fs.readFileSync(target, "utf-8") === script) {
+            if (alreadyInstalled && fs.readFileSync(target, "utf-8") === script) {
                 return;
             }
         } catch {}
 
-        // User previously declined — don't ask again
-        if (fs.existsSync(cliDeclinedFile)) return;
+        // Already installed but outdated → silently update (user already agreed before)
+        if (alreadyInstalled) {
+            // fall through to install — no prompt needed
+        } else {
+            // Never installed — respect previous decline
+            if (fs.existsSync(cliDeclinedFile)) return;
+        }
 
         try {
             // Write script to a temp file, then sudo-copy it (avoids shell escaping)
             const tmpFile = path.join(app.getPath("temp"), "locode-cli-install.sh");
             fs.writeFileSync(tmpFile, script, { mode: 0o755 });
 
-            // Two-step osascript: explain what will happen, then ask for admin privileges
-            const osa = [
-                'osascript',
-                '-e', `display dialog "LoCode wants to install the locode command in ${target} so you can open projects from the terminal (e.g. locode .)" buttons {"Cancel", "Install"} default button "Install" with title "LoCode CLI" with icon caution`,
-                '-e', `do shell script "mkdir -p /usr/local/bin && cp '${tmpFile}' ${target} && chmod 755 ${target}" with administrator privileges`,
-            ];
-            require("child_process").execFileSync(osa[0], osa.slice(1), { stdio: "ignore" });
+            const copyCmd = `do shell script "mkdir -p /usr/local/bin && cp '${tmpFile}' ${target} && chmod 755 ${target}" with administrator privileges`;
+
+            if (alreadyInstalled) {
+                // Silent update — user already agreed, just need admin password
+                require("child_process").execFileSync("osascript", ["-e", copyCmd], { stdio: "ignore" });
+            } else {
+                // First install — explain what will happen, then ask for admin privileges
+                const osa = [
+                    'osascript',
+                    '-e', `display dialog "LoCode wants to install the locode command in ${target} so you can open projects from the terminal (e.g. locode .)" buttons {"Cancel", "Install"} default button "Install" with title "LoCode CLI" with icon caution`,
+                    '-e', copyCmd,
+                ];
+                require("child_process").execFileSync(osa[0], osa.slice(1), { stdio: "ignore" });
+            }
             try { fs.unlinkSync(tmpFile); } catch {}
             log("[cli] installed /usr/local/bin/locode");
         } catch (err) {
-            // User cancelled — remember their choice so we don't ask again
-            try { fs.writeFileSync(cliDeclinedFile, new Date().toISOString()); } catch {}
-            log(`[cli] macOS install declined or failed: ${err.message}`);
+            if (!alreadyInstalled) {
+                // User cancelled first install — remember so we don't ask again
+                try { fs.writeFileSync(cliDeclinedFile, new Date().toISOString()); } catch {}
+            }
+            log(`[cli] macOS install ${alreadyInstalled ? "update" : "declined or"} failed: ${err.message}`);
         }
     } else if (platform === "win32") {
         const appDir = path.dirname(process.execPath);
