@@ -59,8 +59,8 @@ export default defineWebSocketHandler({
 
                             terminalConns.set(peer.id, { conn, stream });
 
-                            // If cwd is set, mute output until the cd+clear has finished
-                            let muted = !!data.cwd;
+                            // Mute output until clear has finished (hides MOTD/banners and cd command)
+                            let muted = true;
 
                             stream.on("data", (chunk: Buffer) => {
                                 if (muted) {
@@ -89,9 +89,11 @@ export default defineWebSocketHandler({
                                 terminalConns.delete(peer.id);
                             });
 
-                            // Set initial cwd if provided
+                            // Set initial cwd if provided, then clear to hide MOTD/banners
                             if (data.cwd) {
                                 stream.write(`cd ${JSON.stringify(data.cwd)} && clear\n`);
+                            } else {
+                                stream.write(`clear\n`);
                             }
                         },
                     );
