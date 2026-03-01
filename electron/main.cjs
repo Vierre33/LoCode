@@ -12,6 +12,10 @@ if (!app.requestSingleInstanceLock()) {
     process.exit(0);
 }
 
+// Fix GPU compositing differences (semi-transparent colors render inconsistently
+// during CSS transitions in Electron's Chromium on some platforms like WSL2/Linux)
+app.commandLine.appendSwitch("disable-gpu-compositing");
+
 const isPacked = app.isPackaged;
 
 // In dev:    __dirname = <project>/electron → root = <project>
