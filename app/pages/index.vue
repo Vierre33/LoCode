@@ -867,7 +867,7 @@ function executePendingAction() {
 
 // --- In-memory file cache (lives for the session, cleared on workspace change) ---
 // Updated only on first fetch and on save — never by polling.
-interface CachedFile { code: string; language: string }
+interface CachedFile { code: string; language: string; mtime: number }
 const fileCache = new Map<string, CachedFile>();
 
 // --- Hot-reload: mtime polling for open panes only (1s) ---
@@ -924,14 +924,30 @@ async function loadFileIntoPane(paneId: string, path: string) {
     pane.filePath = path;
     pane.language = detectLanguage(path);
 
-    // Serve from cache — same code path as a fresh fetch (no visual difference)
+    // Serve from cache instantly, then refresh from disk in background
     const cached = fileCache.get(path);
     if (cached) {
         pane.code = cached.code;
         pane.savedCode = cached.code;
         pane.language = cached.language;
-        fetchMtime(path).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
         saveWorkspaceConfig();
+        // Background: check mtime, only fetch full file if changed on disk
+        fetchMtime(path).then(async (mt) => {
+            if (mt !== null) lastMtime.set(paneId, mt);
+            if (mt === null || mt <= cached.mtime) return; // unchanged
+            try {
+                const res = await apiFetch("/read?path=" + encodeURIComponent(path));
+                if (!res.ok) return;
+                const text = await res.text();
+                fileCache.set(path, { code: text, language: pane.language, mtime: mt });
+                // Only update pane if user hasn't edited since
+                if (pane.code === cached.code) {
+                    userEdited.delete(paneId);
+                    pane.code = text;
+                    pane.savedCode = text;
+                }
+            } catch {}
+        });
         return;
     }
 
@@ -948,8 +964,8 @@ async function loadFileIntoPane(paneId: string, path: string) {
         const text = await res.text();
         pane.code = text;
         pane.savedCode = text;
-        // Cache on first fetch
-        fileCache.set(path, { code: text, language: pane.language });
+        // Cache on first fetch (mtime filled async below)
+        fileCache.set(path, { code: text, language: pane.language, mtime: 0 });
     } catch {
         pane.code = "Network error: unable to load file";
         pane.savedCode = pane.code;
@@ -957,7 +973,13 @@ async function loadFileIntoPane(paneId: string, path: string) {
     } finally {
         loadingPaneId.value = null;
     }
-    fetchMtime(path).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
+    fetchMtime(path).then(mt => {
+        if (mt !== null) {
+            lastMtime.set(paneId, mt);
+            const c = fileCache.get(path);
+            if (c) c.mtime = mt;
+        }
+    });
     saveWorkspaceConfig();
 }
 
@@ -978,8 +1000,11 @@ async function savePaneFile(paneId: string) {
         } else {
             pane.savedCode = pane.code;
             const filePath = pane.filePath;
-            fileCache.set(filePath, { code: pane.code, language: pane.language });
-            fetchMtime(filePath).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
+            fetchMtime(filePath).then(mt => {
+                const mtime = mt ?? Date.now();
+                fileCache.set(filePath, { code: pane.code, language: pane.language, mtime });
+                if (mt !== null) lastMtime.set(paneId, mtime);
+            });
         }
     } catch {
         console.error("Network error: unable to save file");
