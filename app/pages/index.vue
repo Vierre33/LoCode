@@ -396,6 +396,21 @@ function emptyPane(id: string): EditorPane {
     return { id, filePath: "", code: "", savedCode: "", language: "" };
 }
 
+// --- Path helpers (relative storage for cross-mode compatibility) ---
+function toRelative(absPath: string, root: string): string {
+    if (!absPath || !root) return absPath;
+    if (absPath.startsWith(root + "/")) return absPath.slice(root.length + 1);
+    if (absPath.startsWith(root + "\\")) return absPath.slice(root.length + 1);
+    return absPath;
+}
+
+function toAbsolute(relOrAbs: string, root: string): string {
+    if (!relOrAbs) return "";
+    // Already absolute: Unix, Windows drive, or UNC path — pass through (backward compat)
+    if (relOrAbs.startsWith("/") || /^[A-Za-z]:/.test(relOrAbs) || relOrAbs.startsWith("\\\\")) return relOrAbs;
+    return root + "/" + relOrAbs;
+}
+
 const showSettings = ref(false);
 const isRemote = import.meta.client ? ref(getMode() !== "local") : ref(false);
 
@@ -434,8 +449,9 @@ const terminalPanelRef = ref<{ resetSessions: (count: number, splitIndex: number
 // --- Persist workspace state to .LoCode ---
 function saveWorkspaceConfig() {
     if (!rootPath.value) return;
-    saveConfig(rootPath.value, {
-        paneFiles: panes.value.map(p => p.filePath),
+    const root = rootPath.value;
+    saveConfig(root, {
+        paneFiles: panes.value.map(p => p.filePath ? toRelative(p.filePath, root) : ""),
         activePaneIndex: panes.value.findIndex(p => p.id === activePaneId.value),
         terminalOpen: terminalOpen.value,
         terminalCount: terminalSessionCount.value,
@@ -451,7 +467,7 @@ watch([terminalSessionCount, terminalSplitIndex, terminalActiveSplitLeft, termin
 // --- Config update handlers (from child emits) ---
 function onUpdateOpenFolders(folders: string[]) {
     cfgOpenFolders.value = folders;
-    saveConfig(rootPath.value, { openFolders: folders });
+    saveConfig(rootPath.value, { openFolders: folders.map(f => toRelative(f, rootPath.value)) });
 }
 
 function onUpdateSplitRatio(ratio: number) {
@@ -491,6 +507,7 @@ function resetToFolderSelector() {
     panes.value = [emptyPane("main")];
     activePaneId.value = "main";
     lastMtime.clear();
+    fileCache.clear();
     if (terminalOpen.value) closeTerminal();
     // If rootPath was already empty, the watcher won't fire — trigger browse manually
     if (wasEmpty) {
@@ -589,7 +606,7 @@ onMounted(async () => {
         electronSession?.setRoot(rootPath.value);
         const config = await loadConfig(rootPath.value);
         sidebarWidth.value = config.sidebarWidth;
-        cfgOpenFolders.value = config.openFolders;
+        cfgOpenFolders.value = config.openFolders.map(f => toAbsolute(f, rootPath.value));
         cfgSplitRatio.value = config.splitRatio;
         cfgTerminalHeight.value = config.terminalHeight;
         await restoreWorkspace(rootPath.value, config);
@@ -671,7 +688,7 @@ async function restoreWorkspace(_path: string, config: LocodeConfig) {
     terminalSavedPairs.value = config.terminalSavedPairs ?? [];
     terminalPanelRef.value?.resetSessions(terminalSessionCount.value, terminalSplitIndex.value, terminalSavedPairs.value, terminalActiveSplitLeft.value, terminalFocusedIndex.value);
 
-    const files = config.paneFiles || [];
+    const files = (config.paneFiles || []).map(f => f ? toAbsolute(f, _path) : "");
     if (files.length === 2 && files[0] && files[1]) {
         panes.value = [
             emptyPane("left"),
@@ -696,9 +713,10 @@ async function restoreWorkspace(_path: string, config: LocodeConfig) {
 // --- File selection ---
 async function onSelectRoot(path: string) {
     saveWorkspaceConfig();
+    fileCache.clear();
     const config = await loadConfig(path);
     sidebarWidth.value = config.sidebarWidth;
-    cfgOpenFolders.value = config.openFolders;
+    cfgOpenFolders.value = config.openFolders.map(f => toAbsolute(f, path));
     cfgSplitRatio.value = config.splitRatio;
     cfgTerminalHeight.value = config.terminalHeight;
     rootPath.value = path;
@@ -709,6 +727,14 @@ async function onSelectRoot(path: string) {
 
 function onSelectFile(path: string) {
     if (isMobile.value) sidebarOpen.value = false;
+    // If file is already open in a pane, just focus it and refresh from disk
+    const existing = panes.value.find(p => p.filePath === path);
+    if (existing) {
+        activePaneId.value = existing.id;
+        editorAreaRef.value?.focusPane(existing.id);
+        refreshPaneFromDisk(existing.id);
+        return;
+    }
     const p = activePane.value;
     if (p && isPaneDirty(p)) {
         pendingAction = { type: "select", path };
@@ -840,7 +866,12 @@ function executePendingAction() {
     }
 }
 
-// --- File auto-reload (mtime polling) ---
+// --- In-memory file cache (lives for the session, cleared on workspace change) ---
+// Updated only on first fetch and on save — never by polling.
+interface CachedFile { code: string; language: string }
+const fileCache = new Map<string, CachedFile>();
+
+// --- Hot-reload: mtime polling for open panes only (1s) ---
 const lastMtime = new Map<string, number>();
 
 async function fetchMtime(path: string): Promise<number | null> {
@@ -852,6 +883,27 @@ async function fetchMtime(path: string): Promise<number | null> {
     } catch { return null; }
 }
 
+// Refresh an open pane from disk if mtime changed (no cache write)
+async function refreshPaneFromDisk(paneId: string) {
+    const pane = panes.value.find(p => p.id === paneId);
+    if (!pane || !pane.filePath) return;
+    const mtime = await fetchMtime(pane.filePath);
+    if (mtime === null) return;
+    const prev = lastMtime.get(paneId);
+    if (prev && mtime <= prev) return;
+    if (pane.code !== pane.savedCode) { lastMtime.set(paneId, mtime); return; }
+    try {
+        const res = await apiFetch("/read?path=" + encodeURIComponent(pane.filePath));
+        if (res.ok) {
+            const text = await res.text();
+            userEdited.delete(paneId);
+            pane.code = text;
+            pane.savedCode = text;
+            lastMtime.set(paneId, mtime);
+        }
+    } catch {}
+}
+
 let reloadInterval: ReturnType<typeof setInterval> | null = null;
 
 function startReloadPolling() {
@@ -859,26 +911,9 @@ function startReloadPolling() {
     reloadInterval = setInterval(async () => {
         for (const pane of panes.value) {
             if (!pane.filePath) continue;
-            const mtime = await fetchMtime(pane.filePath);
-            if (mtime === null) continue;
-            const prev = lastMtime.get(pane.id);
-            if (prev && mtime > prev && pane.code === pane.savedCode) {
-                // File changed on disk and no unsaved edits — reload
-                try {
-                    const res = await apiFetch("/read?path=" + encodeURIComponent(pane.filePath));
-                    if (res.ok) {
-                        const text = await res.text();
-                        userEdited.delete(pane.id);
-                        pane.code = text;
-                        pane.savedCode = text;
-                        lastMtime.set(pane.id, mtime);
-                    }
-                } catch {}
-            } else if (!prev || mtime > prev) {
-                lastMtime.set(pane.id, mtime);
-            }
+            await refreshPaneFromDisk(pane.id);
         }
-    }, 2000);
+    }, 1000);
 }
 
 // --- File I/O ---
@@ -889,6 +924,18 @@ async function loadFileIntoPane(paneId: string, path: string) {
     userEdited.delete(paneId);
     pane.filePath = path;
     pane.language = detectLanguage(path);
+
+    // Serve from cache — same code path as a fresh fetch (no visual difference)
+    const cached = fileCache.get(path);
+    if (cached) {
+        pane.code = cached.code;
+        pane.savedCode = cached.code;
+        pane.language = cached.language;
+        fetchMtime(path).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
+        saveWorkspaceConfig();
+        return;
+    }
+
     loadingPaneId.value = paneId;
 
     try {
@@ -902,6 +949,8 @@ async function loadFileIntoPane(paneId: string, path: string) {
         const text = await res.text();
         pane.code = text;
         pane.savedCode = text;
+        // Cache on first fetch
+        fileCache.set(path, { code: text, language: pane.language });
     } catch {
         pane.code = "Network error: unable to load file";
         pane.savedCode = pane.code;
@@ -929,7 +978,9 @@ async function savePaneFile(paneId: string) {
             console.error("Save failed:", await res.text());
         } else {
             pane.savedCode = pane.code;
-            fetchMtime(pane.filePath).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
+            const filePath = pane.filePath;
+            fileCache.set(filePath, { code: pane.code, language: pane.language });
+            fetchMtime(filePath).then(mt => { if (mt !== null) lastMtime.set(paneId, mt); });
         }
     } catch {
         console.error("Network error: unable to save file");

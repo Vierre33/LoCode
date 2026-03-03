@@ -304,6 +304,29 @@ git tag v0.1.0 && git push --tags   # déclenche le workflow
 - `Terminal.client.vue` : connexion WebSocket via `useApi().getWsUrl()` (local ou distant selon config)
 - Icône engrenage dans le header de `index.vue` avec indicateur visuel `.btn-remote` quand un backend distant est actif
 
+### Cache fichier en mémoire
+- `fileCache` (`Map<string, CachedFile>`) : cache in-memory des fichiers ouverts, clé = chemin absolu, valeur = `{ code, language }`
+- Cache alimenté uniquement à la première lecture (`loadFileIntoPane`) et à la sauvegarde (`savePaneFile`) — jamais par le polling mtime
+- Réouverture d'un fichier déjà caché : contenu servi instantanément depuis le cache (pas de progress bar, pas de fetch réseau), identique visuellement à un chargement API
+- Cache vidé au changement de workspace (`onSelectRoot`, `resetToFolderSelector`) — pas de persistance, détruit à la fermeture de fenêtre
+- Gain majeur en mode SSH : évite le re-téléchargement de gros fichiers (ex: `package-lock.json` ~3s → instantané)
+
+### Hot-reload fichiers ouverts
+- Polling mtime toutes les 1s (au lieu de 2s) pour les fichiers actuellement ouverts dans les panes
+- `refreshPaneFromDisk(paneId)` : compare le mtime courant au précédent, re-lit le fichier uniquement si changé sur le disque ET pas de modifications non sauvegardées
+- Le polling ne touche pas le cache — il met à jour uniquement le contenu du pane (`pane.code`, `pane.savedCode`)
+- Clic sur un fichier déjà ouvert dans un pane → focus du pane + refresh mtime en background (pas de rechargement complet)
+
+### Persistance cross-mode (SSH ↔ local)
+- Les chemins dans `.LoCode` (`paneFiles`, `openFolders`) sont stockés en **relatif** par rapport au `rootPath` (ex: `src/index.ts` au lieu de `/home/py/project/src/index.ts`)
+- `toRelative(absPath, root)` / `toAbsolute(relOrAbs, root)` : conversion à la sauvegarde / restauration
+- Rétrocompatible : les anciens chemins absolus (commençant par `/`, `C:\`, `\\\\`) sont détectés et passent au travers sans modification
+- Résout le conflit entre chemins Linux (SSH depuis Mac) et chemins UNC Windows (`\\wsl.localhost\...` en mode local desktop)
+
+### Lancement WSL amélioré
+- Shell script WSL utilise `setsid` pour détacher complètement le processus Electron du terminal WSL (évite SIGHUP à la fermeture du terminal)
+- `second-instance` handler : `w.show()` + `setAlwaysOnTop(true/false)` pour forcer la fenêtre au premier plan sur Windows (contourne la protection anti-focus-stealing)
+
 ### Refactoring code cleanup
 - Suppression de `server/api/[...url].ts` (ancien proxy Deno catch-all, remplacé par routes `/api/local/*` et `/api/ssh/*`)
 - `useApi.ts` simplifié : déduplication logique protocole dans `getWsUrl()`, appel unique `getStoredSSHTarget()` par fonction

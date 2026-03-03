@@ -186,6 +186,10 @@ app.on("second-instance", (_event, argv, workingDirectory) => {
         if (wins.length > 0) {
             const w = wins[0];
             if (w.isMinimized()) w.restore();
+            w.show();
+            // Force window to front on Windows (bypasses focus stealing prevention)
+            w.setAlwaysOnTop(true);
+            w.setAlwaysOnTop(false);
             w.focus();
         } else {
             createWindow();
@@ -428,9 +432,9 @@ async function installCLI() {
                 '    DIR="$(wslpath -w "$(cd "$1" && pwd)")"',
                 'fi',
                 'if [ -n "$DIR" ]; then',
-                `    "${wslExePath}" "$DIR" >/dev/null 2>&1 &`,
+                `    setsid "${wslExePath}" "$DIR" >/dev/null 2>&1 &`,
                 'else',
-                `    "${wslExePath}" >/dev/null 2>&1 &`,
+                `    setsid "${wslExePath}" >/dev/null 2>&1 &`,
                 'fi',
             ].join("\n") + "\n";
 
