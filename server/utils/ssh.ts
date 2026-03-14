@@ -50,9 +50,12 @@ export async function sshConnect(opts: {
             host: opts.host,
             port: opts.port || 22,
             username: opts.username,
-            // Try SSH agent first (SSH_AUTH_SOCK)
-            agent: process.env.SSH_AUTH_SOCK,
         };
+
+        // Only use SSH agent if available
+        if (process.env.SSH_AUTH_SOCK) {
+            config.agent = process.env.SSH_AUTH_SOCK;
+        }
 
         // Add private key if available
         const privateKey = findPrivateKey();
@@ -60,10 +63,16 @@ export async function sshConnect(opts: {
             config.privateKey = privateKey;
         }
 
-        // Add password if provided (used as fallback)
+        // Add password if provided
         if (opts.password) {
             config.password = opts.password;
+            config.tryKeyboard = true;
         }
+
+        // Keyboard-interactive handler (some servers require this instead of plain password)
+        conn.on("keyboard-interactive", (_name, _instructions, _instructionsLang, prompts, finish) => {
+            finish([opts.password || ""]);
+        });
 
         // Timeout after 10 seconds
         config.readyTimeout = 10000;
