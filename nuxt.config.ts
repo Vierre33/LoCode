@@ -7,7 +7,6 @@ export default defineNuxtConfig({
     modules: ['@nuxt/ui', '@nuxt/ui-pro'],
     css: ['~/assets/css/main.css'],
     runtimeConfig: {
-        authToken: process.env.LOCODE_AUTH_TOKEN || '',
         public: {
             mode, // 'desktop' = full (local + SSH), 'web' = SSH-only
         },

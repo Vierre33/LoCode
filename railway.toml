@@ -1,5 +1,5 @@
 [build]
-buildCommand = "npm ci && LOCODE_MODE=web npm run build"
+buildCommand = "LOCODE_MODE=web npm run build"
 
 [deploy]
 startCommand = "node .output/server/index.mjs"
