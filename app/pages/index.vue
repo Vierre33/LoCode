@@ -390,7 +390,7 @@ import { useLocodeConfig } from '~/composables/useLocodeConfig';
 import type { LocodeConfig } from '~/composables/useLocodeConfig';
 
 const { loadConfig, saveConfig } = useLocodeConfig();
-const { apiFetch, getMode } = useApi();
+const { apiFetch, getMode, isWebMode } = useApi();
 
 function emptyPane(id: string): EditorPane {
     return { id, filePath: "", code: "", savedCode: "", language: "" };
@@ -612,6 +612,11 @@ onMounted(async () => {
         await restoreWorkspace(rootPath.value, config);
     }
     startReloadPolling();
+
+    // In web mode, auto-open settings if no SSH connection is active
+    if (isWebMode && getMode() !== 'ssh') {
+        showSettings.value = true;
+    }
 });
 
 onBeforeUnmount(() => {

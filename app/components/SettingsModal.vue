@@ -1,10 +1,10 @@
 <template>
     <Teleport to="body">
         <Transition name="modal">
-            <div v-if="show" class="dialog-backdrop" @click="$emit('close')">
+            <div v-if="show" class="dialog-backdrop" @click="(!isWebMode || connected) && $emit('close')">
                 <div class="dialog" @click.stop>
-                    <button class="dialog-close" @click="$emit('close')">&times;</button>
-                    <p class="dialog-title">Settings</p>
+                    <button v-if="!isWebMode || connected" class="dialog-close" @click="$emit('close')">&times;</button>
+                    <p class="dialog-title">{{ isWebMode && !connected ? 'Connect to a remote server' : 'Settings' }}</p>
 
                     <!-- SSH Connection -->
                     <div class="section">
@@ -56,9 +56,15 @@
                             </div>
 
                             <p class="field-hint">
-                                Enter an SSH address to browse files and run terminals on the remote machine.
-                                Authentication uses your SSH keys (~/.ssh/id_ed25519, id_rsa) or SSH agent automatically.
-                                Password is only needed if key auth fails.
+                                <template v-if="isWebMode">
+                                    Connect to a remote machine via SSH to browse files, edit code, and run terminals.
+                                    Provide your password or ensure SSH keys are configured on the server.
+                                </template>
+                                <template v-else>
+                                    Enter an SSH address to browse files and run terminals on the remote machine.
+                                    Authentication uses your SSH keys (~/.ssh/id_ed25519, id_rsa) or SSH agent automatically.
+                                    Password is only needed if key auth fails.
+                                </template>
                             </p>
 
                             <div class="ssh-actions">
@@ -92,6 +98,8 @@
 <script setup lang="ts">
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: "close"): void; (e: "saved"): void; (e: "connected"): void; (e: "disconnected"): void }>();
+
+const { isWebMode } = useApi();
 
 const sshHost = ref("");
 const sshPort = ref(22);
