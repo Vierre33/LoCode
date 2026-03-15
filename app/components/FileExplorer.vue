@@ -341,25 +341,8 @@ const unwatchInitialFolders = watch(() => props.initialOpenFolders, async (newVa
 }, { immediate: false });
 
 onMounted(async () => {
-    // In web mode without sessionStorage target, check server for active SSH connection
+    // In web mode without SSH connection, wait for user to connect
     if (isWebMode && !sessionStorage.getItem('locode:sshTarget')) {
-        try {
-            const res = await apiFetch('/info');
-            if (res.ok) {
-                const info = await res.json();
-                if (info.connected) {
-                    // Server has an active SSH connection — restore sessionStorage from saved creds
-                    const creds = localStorage.getItem('locode:sshCreds');
-                    if (creds) sessionStorage.setItem('locode:sshTarget', creds);
-                    treeLoading.value = true;
-                    browsing.value = true;
-                    await loadBrowseTree();
-                    window.addEventListener("keydown", onEscape);
-                    return;
-                }
-            }
-        } catch {}
-        // No active connection — wait for user to connect
         browsing.value = true;
         window.addEventListener("keydown", onEscape);
         return;

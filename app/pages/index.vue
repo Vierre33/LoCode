@@ -613,26 +613,9 @@ onMounted(async () => {
     }
     startReloadPolling();
 
-    // In web mode, check server for active SSH connection before showing settings
+    // In web mode, auto-open settings if no SSH connection in this tab
     if (isWebMode && !sessionStorage.getItem('locode:sshTarget')) {
-        try {
-            const res = await apiFetch('/info');
-            if (res.ok) {
-                const info = await res.json();
-                if (info.connected) {
-                    // Restore sessionStorage from saved creds
-                    const creds = localStorage.getItem('locode:sshCreds');
-                    if (creds) sessionStorage.setItem('locode:sshTarget', creds);
-                    isRemote.value = true;
-                } else {
-                    showSettings.value = true;
-                }
-            } else {
-                showSettings.value = true;
-            }
-        } catch {
-            showSettings.value = true;
-        }
+        showSettings.value = true;
     }
 });
 
