@@ -428,7 +428,9 @@ const rootPath = ref(
     import.meta.client
         ? (electronSession
             ? electronSession.getInitialRoot()   // Electron: session system is authoritative
-            : localStorage.getItem("locode:rootPath") || "")  // Web: use localStorage
+            : isWebMode
+                ? ""  // Web mode: each tab starts blank, no restore
+                : localStorage.getItem("locode:rootPath") || "")
         : ""
 );
 const sidebarOpen = ref(false);
