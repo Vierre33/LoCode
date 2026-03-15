@@ -11,7 +11,7 @@
                         <p class="section-label">SSH Connection</p>
 
                         <form @submit.prevent="onSubmit">
-                            <div class="ssh-row">
+                            <div class="ssh-row ssh-row-host">
                                 <div class="field" style="flex: 2">
                                     <label class="field-label">Host</label>
                                     <input
@@ -33,7 +33,7 @@
                                 </div>
                             </div>
 
-                            <div class="ssh-row">
+                            <div class="ssh-row ssh-row-auth">
                                 <div class="field" style="flex: 1">
                                     <label class="field-label">Username</label>
                                     <input
@@ -308,6 +308,14 @@ async function disconnect() {
     display: flex;
     gap: 8px;
     margin-bottom: 2px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 480px) {
+    .ssh-row-auth {
+        flex-direction: column;
+        gap: 2px;
+    }
 }
 
 .field {
@@ -337,6 +345,9 @@ async function disconnect() {
     color: rgba(255, 255, 255, 0.9);
     outline: none;
     transition: border-color 0.15s ease;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 .field-input:focus {
     border-color: rgba(100, 180, 255, 0.5);
