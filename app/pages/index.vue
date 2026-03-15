@@ -498,7 +498,7 @@ function closeTerminal() {
 }
 
 // --- SSH connect/disconnect ---
-const fileExplorerRef = ref<{ showBrowse: () => void } | null>(null);
+const fileExplorerRef = ref<{ showBrowse: () => void; reset: () => void } | null>(null);
 
 function resetToFolderSelector() {
     saveWorkspaceConfig();
@@ -523,6 +523,7 @@ function onSSHConnected() {
 
 function onSSHDisconnected() {
     resetToFolderSelector();
+    fileExplorerRef.value?.reset();
 }
 
 const editorAreaRef = ref<{ splitRatio: number; focusPane: (id: string) => void } | null>(null);

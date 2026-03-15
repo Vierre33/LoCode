@@ -368,5 +368,11 @@ defineExpose({
         browsing.value = true;
         loadBrowseTree();
     },
+    reset() {
+        stopPolling();
+        tree.value = [];
+        browsing.value = true;
+        treeLoading.value = false;
+    },
 });
 </script>
